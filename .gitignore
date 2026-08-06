@@ -141,3 +141,24 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# --- Python (llm-service) ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# --- Docker ---
+docker-compose.override.yml
+
+# --- Blockchain / Web3 ---
+artifacts/
+cache/
+typechain-types/
+
+# --- IDE / OS ---
+.vscode/
+.idea/
+.DS_Store

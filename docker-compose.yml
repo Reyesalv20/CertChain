@@ -1,0 +1,87 @@
+services:
+  # --- Portal (Next.js): institucional + público ---
+  frontend:
+    build: ./frontend
+    container_name: certchain-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      # Esta URL la usa el BROWSER del usuario -> debe ser localhost, NO el nombre del servicio
+      - NEXT_PUBLIC_BACKEND_URL=http://localhost:4000
+      # Esta URL es para llamadas server-side (SSR / route handlers) dentro de la red de Docker
+      - BACKEND_INTERNAL_URL=http://backend:4000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - backend
+    networks:
+      - certchain-network
+
+  # --- API principal (NestJS) ---
+  backend:
+    build: ./backend
+    container_name: certchain-backend
+    ports:
+      - "4000:4000"
+    environment:
+      - PORT=4000
+      - LLM_SERVICE_URL=http://llm-service:5000
+      - BLOCKCHAIN_SERVICE_URL=http://blockchain-service:6000
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    depends_on:
+      - blockchain-service
+      - llm-service
+    networks:
+      - certchain-network
+
+  # --- Servicio de blockchain (emisión/verificación de certificados) ---
+  blockchain-service:
+    build: ./blockchain-service
+    container_name: certchain-blockchain
+    ports:
+      - "6000:6000"
+    environment:
+      - PORT=6000
+    volumes:
+      - ./blockchain-service:/app
+      - /app/node_modules
+    networks:
+      - certchain-network
+
+  # --- Servicio LLM/RAG (placeholder hasta que se implemente) ---
+  llm-service:
+    build: ./llm-service
+    container_name: certchain-llm
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - OLLAMA_URL=http://ollama:11434
+    volumes:
+      - ./llm-service:/app
+    depends_on:
+      - ollama
+    networks:
+      - certchain-network
+
+  # --- Motor de modelos LLM ---
+  ollama:
+    image: ollama/ollama
+    container_name: certchain-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    networks:
+      - certchain-network
+
+networks:
+  certchain-network:
+    driver: bridge
+
+volumes:
+  ollama-data:
