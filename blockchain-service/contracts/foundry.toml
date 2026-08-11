@@ -1,0 +1,14 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+
+# Sin versión fija: Foundry detecta automáticamente una versión compatible
+# con el pragma del contrato (^0.8.20) y con binario disponible para tu
+# plataforma. Fijar una versión muy nueva (ej. 0.8.35) puede fallar si
+# todavía no hay binario precompilado para tu arquitectura (ej. Mac ARM).
+# solc = "0.8.35"
+optimizer = true
+optimizer_runs = 200
+
+# See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

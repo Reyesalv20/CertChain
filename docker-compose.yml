@@ -1,3 +1,5 @@
+include:
+  - ./blockchain-service/docker-compose.yml
 services:
   # --- Portal (Next.js): institucional + público ---
   frontend:
@@ -28,29 +30,22 @@ services:
     environment:
       - PORT=4000
       - LLM_SERVICE_URL=http://llm-service:5000
-      - BLOCKCHAIN_SERVICE_URL=http://blockchain-service:6000
+      # El servicio de blockchain real se llama "server" (definido en
+      # blockchain-service/docker-compose.yml), ya no "blockchain-service"
+      - BLOCKCHAIN_SERVICE_URL=http://server:6000
     volumes:
       - ./backend:/app
       - /app/node_modules
     depends_on:
-      - blockchain-service
+      - server
       - llm-service
     networks:
       - certchain-network
 
-  # --- Servicio de blockchain (emisión/verificación de certificados) ---
-  blockchain-service:
-    build: ./blockchain-service
-    container_name: certchain-blockchain
-    ports:
-      - "6000:6000"
-    environment:
-      - PORT=6000
-    volumes:
-      - ./blockchain-service:/app
-      - /app/node_modules
-    networks:
-      - certchain-network
+  # NOTA: el servicio de blockchain ya no se define aquí. Ahora vive en
+  # ./blockchain-service/docker-compose.yml (incluido arriba con "include:"),
+  # que trae 3 servicios: anvil (blockchain local), deploy (despliega el
+  # contrato) y server (la API real, en el puerto 6000).
 
   # --- Servicio LLM/RAG (placeholder hasta que se implemente) ---
   llm-service:

@@ -1,0 +1,64 @@
+services:
+
+  # ---- 1) La blockchain local ----
+  anvil:
+    image: ghcr.io/foundry-rs/foundry:stable
+    # IMPORTANTE: la imagen de Foundry trae ENTRYPOINT ["/bin/sh","-c"],
+    # que "se come" todos los args de un comando en lista (solo corre la
+    # primera palabra). La solución: entrypoint explícito, sin sh -c.
+    entrypoint: ["anvil", "--host", "0.0.0.0", "--port", "8545"]
+    # 0.0.0.0 = escuchar dentro de la red Docker (por defecto anvil
+    # solo acepta localhost, y los otros contenedores no podrían conectarse)
+    ports:
+      - "8545:8545"   # host:contenedor → seguís usando `cast` desde tu terminal
+    networks:
+      - certchain-network   # misma red que el resto del proyecto (definida en el docker-compose.yml raíz)
+
+  # ---- 2) El despliegue (se ejecuta UNA vez y termina) ----
+  deploy:
+    image: ghcr.io/foundry-rs/foundry:stable
+    entrypoint: ["sh"]          # mismo fix: sin sh -c intermedio
+    command: ["/app/deploy.sh"]
+    # La imagen corre como usuario "foundry" (uid 1000) y no puede
+    # escribir en /app/out ni en el volumen. Como deploy es un contenedor
+    # efímero de desarrollo, corremos como root sin drama.
+    user: root
+    working_dir: /app
+    volumes:
+      - ./contracts/src:/app/src         # el contrato (montado en vivo)
+      - ./contracts/foundry.toml:/app/foundry.toml
+      - ./deploy.sh:/app/deploy.sh  # el script de despliegue
+      - shared:/shared              # volumen compartido: escribe la dirección
+    depends_on:
+      - anvil
+    networks:
+      - certchain-network
+
+  # ---- 3) El server Express ----
+  server:
+    build: .                        # usa tu Dockerfile (imagen multi-stage)
+    image: blockchain-service:latest
+    environment:
+      # Dentro de la red Docker, "anvil" es el nombre del host del
+      # contenedor anvil — así el server encuentra la blockchain
+      RPC_URL: http://anvil:8545
+      PRIVATE_KEY: 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+      PORT: 6000
+    volumes:
+      - shared:/shared              # lee CONTRACT_ADDRESS de acá
+    depends_on:
+      - anvil
+      - deploy
+    ports:
+      - "6000:6000"   # el server escucha 3000 adentro, 4000 afuera
+                      # (3000 en tu host está ocupado por la app de OpenWork)
+    networks:
+      - certchain-network   # así "backend" (en el compose raíz) lo encuentra como http://server:6000
+
+# NOTA: no hace falta declarar "certchain-network" aquí abajo. Como este
+# archivo se une al principal con "include:", la red ya queda definida
+# una sola vez en el docker-compose.yml de la raíz — aquí solo nos unimos
+# a ella por nombre en cada servicio.
+
+volumes:
+  shared:   # el volumen compartido entre deploy y server
