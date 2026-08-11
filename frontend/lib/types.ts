@@ -1,0 +1,67 @@
+// Tipos compartidos entre las páginas del frontend.
+// Deben reflejar exactamente lo que devuelve el backend (NestJS, puerto 4000).
+// Si el backend cambia la forma de una respuesta, actualizar aquí también.
+
+export interface Institucion {
+  id: string;
+  nombre: string;
+  email: string;
+}
+
+export type EstadoCertificado = 'pendiente' | 'registrado';
+
+export interface Certificado {
+  id: string;
+  codigo: string; // ej. "UAX-2024-0847-MENG"
+  nombreEstudiante: string;
+  carrera: string;
+  fechaEmision: string; // ISO date (YYYY-MM-DD)
+  institucion?: string;
+  hash: string; // SHA-256 del documento
+  rfid?: string;
+  estado: EstadoCertificado;
+}
+
+export interface ResultadoVerificacion {
+  valido: boolean;
+  certificado?: Certificado;
+}
+
+export interface ActividadReciente {
+  codigo: string;
+  nombreEstudiante: string;
+  fecha: string;
+}
+
+export interface EstadisticasDashboard {
+  total: number;
+  esteMes: number;
+  pendientes: number;
+}
+
+export interface MensajeChat {
+  rol: 'usuario' | 'bot';
+  texto: string;
+}
+
+// Respuesta del primer paso de emisión: el backend recibe el PDF,
+// lo guarda/parsea y devuelve los datos que se prellenan en el formulario.
+export interface SubidaCertificado {
+  subidaId: string;
+  nombreEstudiante: string;
+  carrera: string;
+  fechaEmision: string;
+  archivoNombre: string;
+}
+
+export interface DatosRegistroCertificado {
+  subidaId: string;
+  nombreEstudiante: string;
+  carrera: string;
+  fechaEmision: string;
+}
+
+export interface CredencialesLogin {
+  email: string;
+  password: string;
+}
