@@ -9,7 +9,8 @@ import { Suspense, useState, type FormEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ShieldIcon } from '@/components/icons';
 import { CertSeal } from '@/components/CertSeal';
-import { api, ApiError } from '@/lib/api';
+import { createClient } from '@/lib/supabase/client';
+//import { api, ApiError } from '@/lib/api';
 
 // useSearchParams necesita un límite <Suspense> para no des-optimizar
 // el resto de la página durante el build estático de Next.js.
@@ -37,16 +38,22 @@ function LoginForm() {
     }
     setLoading(true);
     setError('');
-    try {
-      await api.login({ email, password });
-      const redirectTo = searchParams.get('redirect') || '/dashboard';
-      router.push(redirectTo);
-      router.refresh();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No se pudo iniciar sesión.');
-    } finally {
+
+    const supabase = createClient();
+    const { error: authError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (authError) {
+      setError(authError.message);
       setLoading(false);
+      return;
     }
+
+    const redirectTo = searchParams.get('redirect') || '/dashboard';
+    router.push(redirectTo);
+    router.refresh();
   }
 
   return (
