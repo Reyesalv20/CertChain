@@ -31,30 +31,38 @@ function LoginForm() {
   const [error, setError] = useState('');
 
   async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    if (!email || !password) {
-      setError('Por favor ingresa tus credenciales.');
-      return;
-    }
-    setLoading(true);
-    setError('');
+  e.preventDefault();
+  if (!email || !password) {
+    setError('Por favor ingresa tus credenciales.');
+    return;
+  }
+  setLoading(true);
+  setError('');
 
+  try {
     const supabase = createClient();
-    const { error: authError } = await supabase.auth.signInWithPassword({
+    const { data, error: authError } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
+    console.log('login result:', data, authError); // debug temporal, quítalo después
+
     if (authError) {
       setError(authError.message);
-      setLoading(false);
       return;
     }
 
-    const redirectTo = searchParams.get('redirect') || '/dashboard';
+    const redirectTo = searchParams.get('redirect') || '/verificar';
     router.push(redirectTo);
     router.refresh();
+  } catch (err) {
+    console.error('excepción no controlada en login:', err);
+    setError('Ocurrió un error inesperado al iniciar sesión.');
+  } finally {
+    setLoading(false);
   }
+}
 
   return (
     <div className="flex" style={{ minHeight: 'calc(100vh - 64px)' }}>

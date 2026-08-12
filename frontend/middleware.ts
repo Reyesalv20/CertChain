@@ -1,11 +1,10 @@
+import { createServerClient } from '@supabase/ssr';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-// Rutas reales (sin los paréntesis de route group) que pertenecen al portal institucional.
-// Si agregas una página nueva dentro de app/(institucional)/..., agrega su path aquí también.
 const INSTITUCIONAL_PATHS = ['/dashboard', '/certificados'];
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const esInstitucional = INSTITUCIONAL_PATHS.some((path) => pathname.startsWith(path));
 
@@ -13,20 +12,42 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // TODO: reemplazar por validación real (JWT firmado por el backend, expiración, roles, etc.)
-  const token = request.cookies.get('certchain_token');
+  let response = NextResponse.next({ request });
 
-  if (!token) {
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll: () => request.cookies.getAll(),
+        setAll: (cookiesToSet) => {
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+          response = NextResponse.next({ request });
+          cookiesToSet.forEach(({ name, value, options }) =>
+            response.cookies.set(name, value, options)
+          );
+        },
+      },
+    }
+  );
+
+  // IMPORTANTE: usa getUser(), no getSession(), porque getUser()
+  // valida el token contra el servidor de Supabase (getSession() solo lee la cookie local).
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirect', pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  return NextResponse.next();
+  return response;
 }
 
-// El matcher evita que el middleware se ejecute en TODAS las rutas (assets, /verificar, etc.),
-// solo corre en las rutas institucionales -> mejor performance.
 export const config = {
-  matcher: ['/dashboard/:path*', '/certificados/:path*'],
+  //matcher: ['/dashboard/:path*', '/certificados/:path*'],
+  //No sé exactamente por qué, pero si pongo /dashboard/:path* no funciona, 
+  // y si pongo /dashboard sin :path* sí funciona. 
+  // Tal vez sea un bug de Next.js 14.0.0-canary.12.
+  matcher: ['/verificar/:path*', '/certificados/:path*'],
 };
