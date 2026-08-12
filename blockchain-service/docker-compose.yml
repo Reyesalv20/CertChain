@@ -22,6 +22,8 @@ services:
     # efímero de desarrollo, corremos como root sin drama.
     user: root
     working_dir: /app
+    environment:
+      ISSUER_PRIVATE_KEY: 0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d
     volumes:
       - ./contracts/src:/app/src         # el contrato (montado en vivo)
       - ./contracts/foundry.toml:/app/foundry.toml
@@ -38,7 +40,8 @@ services:
       # Dentro de la red Docker, "anvil" es el nombre del host del
       # contenedor anvil — así el server encuentra la blockchain
       RPC_URL: http://anvil:8545
-      PRIVATE_KEY: 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+      PRIVATE_KEY: 0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d 
+      ADMIN_PRIVATE_KEY: 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
       PORT: 6000
     volumes:
       - shared:/shared              # lee CONTRACT_ADDRESS de acá

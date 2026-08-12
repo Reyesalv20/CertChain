@@ -22,6 +22,9 @@ fi
 export CONTRACT_ADDRESS="$(cat /shared/CONTRACT_ADDRESS)"
 echo "Contrato: ${CONTRACT_ADDRESS} ✓"
 
+export TRUSTED_ISSUERS_ADDRESS="$(cat /shared/TRUSTED_ISSUERS_ADDRESS)"
+echo "Registry: ${TRUSTED_ISSUERS_ADDRESS} "
+
 # 4) VERIFICAR que el contrato exista de verdad en la cadena.
 #    anvil es efímero (guarda todo en memoria): si se reinició sin que
 #    deploy volviera a correr, la dirección del volumen queda VIEJA y
@@ -38,6 +41,18 @@ case "$RESP" in
     echo "Contrato verificado en la cadena ✓" ;;
   *)
     echo "ADVERTENCIA: no pude verificar el contrato (${RESP})" >&2 ;;
+esac
+
+REG_RESP=$(wget -qO- --post-data "{\"jsonrpc\":\"2.0\",\"method\":\"eth_getCode\",\"params\":[\"${TRUSTED_ISSUERS_ADDRESS}\",\"latest\"],\"id\":1}" --header "Content-Type: application/json" http://anvil:8545)
+case "$REG_RESP" in
+  *'"result":"0x"'*)
+    echo "ERROR: el registry ${TRUSTED_ISSUERS_ADDRESS} NO existe en la cadena." >&2
+    echo "Solución: docker compose down -v && docker compose up -d" >&2
+    exit 1 ;;
+  *'"result":"0x'*)
+    echo "Registry verificado en la cadena ✓" ;;
+  *)
+    echo "ADVERTENCIA: no pude verificar el registry (${REG_RESP})" >&2 ;;
 esac
 
 echo "Arrancando server en el puerto 3000..."
