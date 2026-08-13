@@ -2,7 +2,7 @@
 
 Este documento es el **contrato** entre el `blockchain-service` y los demás servicios (`backend`, `frontend`). Si trabajás en la base de datos, el portal o la API principal, esto es lo que necesitás saber para conectarte.
 
-> ⚠️ Regla de oro: **la blockchain guarda solo hashes, nunca datos personales.** Todo lo que sea nombre, carrera, PDF, etc. vive en Postgres (off-chain). La cadena solo ancla la prueba de integridad.
+> ⚠️ Regla de oro: **la blockchain guarda solo hashes, nunca datos personales.** La metadata (nombre, carrera, etc.) vive en Postgres (off-chain). El **PDF no se guarda en ningún lado** del sistema: solo se conserva su `pdfHash`. La cadena ancla la prueba de integridad.
 
 ---
 
@@ -36,25 +36,24 @@ Tabla `certificates` (TypeORM):
 | Columna | Tipo | Descripción |
 |---|---|---|
 | `id` | `uuid` (PK) | clave interna |
-| `certId` | `varchar` (único) | identificador público (se usa en `/verificar/:certId`) |
+| `certId` | `varchar` (único) | identificador público legible del certificado |
+| `universityId` | `uuid` (FK → `universities`) | referencia a la universidad emisora (su address vive en esa tabla) |
 | `studentName` | `varchar` | nombre del estudiante (PII → off-chain) |
 | `career` | `varchar` | carrera (PII → off-chain) |
-| `university` | `varchar` | nombre legible de la institución |
 | `issuanceDate` | `timestamp` | fecha de emisión |
 | `pdfHash` | `char(66)` | `keccak256` de los bytes del PDF (`0x` + 64 hex) |
 | `certHash` | `char(66)` (único) | **el hash on-chain**: puente DB ↔ cadena |
-| `issuer` | `char(42)` | dirección de la universidad que firmó |
-| `pdf` | `bytea` (o path) | el archivo en sí |
-| `status` | `enum('pending','registered','revoked')` | ciclo de vida |
 | `createdAt` / `updatedAt` | `timestamp` | auditoría |
 
-**`certHash` es el único campo que relaciona una fila de Postgres con la cadena.** El resto son datos y metadatos off-chain.
+**`certHash` es el único campo que relaciona una fila de Postgres con la cadena.**
+
+La tabla `universities` (ya existente) concentra la identidad de cada institución, incluida su dirección pública; `certificates` solo la referencia por FK.
 
 ---
 
-## 2. Algoritmo canónico del hash (CRÍTICO)
+## 2. Algoritmo del hash (cómo se genera el certHash)
 
-El backend es el **único** que computa el hash. Debe ser determinista y reproducible en verificación.
+El backend es el **único** que computa el `certHash`, **una sola vez, en el momento de la emisión**. Ese `certHash` es el que viaja a la cadena, a la base de datos y a la **tarjeta/sticker NFC/RFID**. Después **no se recomputa**: la verificación consiste en leer el `certHash` del sticker y consultarlo en la cadena.
 
 ```
 pdfHash  = keccak256( bytes del PDF )
@@ -68,13 +67,11 @@ certHash = keccak256( JSON.stringify(metadata) )   // UTF-8, orden fijo
 Reglas:
 
 1. `pdfHash` se calcula sobre los bytes crudos del archivo (`ethers.id(bytes)` o `keccak256(bytes)`).
-2. La metadata se serializa **siempre en ese orden exacto** de claves.
+2. La metadata se serializa **siempre en ese orden exacto** de claves. El campo `university` es el nombre de la institución, que el backend obtiene de la tabla `universities` (vía `universityId`).
 3. `issuanceDate` en un formato fijo (ISO 8601 UTC, ej. `2026-08-12T00:00:00Z`).
 4. `certHash = ethers.id(jsonString)` (equivalente a `keccak256` de los bytes UTF-8).
 
-Si **cualquier** campo de la metadata o el PDF cambia, el `certHash` cambia → la verificación on-chain falla. Eso es lo que hace el sistema anti-falsificación.
-
-> Si implementás esto en TypeScript: `import { id, keccak256, toUtf8Bytes } from "ethers";` y usá `id(JSON.stringify(obj))`.
+> Si implementás esto en TypeScript: `import { id } from "ethers";` y usá `id(JSON.stringify(obj))`.
 
 ---
 
@@ -84,42 +81,47 @@ Si **cualquier** campo de la metadata o el PDF cambia, el `certHash` cambia → 
 
 ```
 frontend ──(multipart/form-data)──▶ backend  POST /certificates/emit
-  campos: pdf (file), studentName, career, university, issuanceDate
+  campos: pdf (file, solo para calcular su hash; NO se guarda),
+          studentName, career, university, issuanceDate
 
 backend:
   1. calcula pdfHash y certHash (§2)
-  2. INSERT en Postgres (status = "pending")
+  2. INSERT en Postgres (solo metadata, sin PDF)
   3. responde → frontend: { certId, certHash }
 
 frontend ──(firma con MetaMask)──▶ anvil: registerCertificate(certHash)
   (el usuario confirma en su wallet; msg.sender = dirección de la universidad)
 
-frontend ──▶ backend  PATCH /certificates/:certId  { status: "registered", txHash }
+Ese mismo certHash es el que se graba en la tarjeta/sticker NFC/RFID del título.
 ```
 
 ### 3.2 Verificación (público)
 
+El `certHash` viaja grabado en una **tarjeta/sticker NFC/RFID**. Verificar es leer ese `certHash` y consultarlo en la cadena; no se recomputa nada:
+
 ```
-frontend ──▶ backend  GET /certificates/:certId/verify
+celular / prototipo ──(NFC/RFID)──▶ lee certHash de la tarjeta
+
+celular ──▶ backend  POST /certificates/verify { certHash }
 
 backend:
-  1. SELECT metadata en Postgres por certId
-  2. recomputa certHash (§2)
-  3. llama al blockchain-service → POST /verifyCertificate { certHash }
-  4. valida: exists && !isRevoked && issuer es confiable && certHash coincide
+  1. llama al blockchain-service → POST /verifyCertificate { certHash }
+  2. (opcional) busca metadata en Postgres por certHash para mostrar nombre/carrera/fecha
 
 respuesta → frontend:
   { ok, valid, issuer, issuerName, issueTimestamp, isRevoked, metadata }
 ```
+
+`valid = exists && !isRevoked`: el `certHash` existe en la cadena y no fue revocado.
 
 ### 3.3 Revocación (solo la universidad dueña)
 
 ```
 frontend ──(firma con MetaMask)──▶ anvil: revokeCertificate(certHash)
   (solo revierte si msg.sender == issuer original)
-
-frontend ──▶ backend  PATCH /certificates/:certId  { status: "revoked" }
 ```
+
+La revocación queda **on-chain** (`isRevoked = true`); el backend no guarda estado, lo lee de la cadena al verificar.
 
 ### 3.4 Alta de universidad (ente regulador)
 
