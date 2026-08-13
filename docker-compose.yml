@@ -1,3 +1,5 @@
+include:
+  - ./blockchain-service/docker-compose.yml
 services:
   # --- Portal (Next.js): institucional + público ---
   frontend:
@@ -12,6 +14,10 @@ services:
       - BACKEND_INTERNAL_URL=http://backend:4000
       # RPC de la blockchain local: la usa el BROWSER (MetaMask) para firmar tx
       - NEXT_PUBLIC_RPC_URL=http://localhost:8545
+      # Sin esto, la primera vez que corre "next dev" muestra el prompt de
+      # telemetría y, al no haber una terminal interactiva en el contenedor,
+      # el proceso se queda esperando input y termina solo (exit code 0).
+      - NEXT_TELEMETRY_DISABLED=1
     volumes:
       - ./frontend:/app
       - /app/node_modules
@@ -30,12 +36,14 @@ services:
     environment:
       - PORT=4000
       - LLM_SERVICE_URL=http://llm-service:5000
-      - BLOCKCHAIN_SERVICE_URL=http://blockchain-service:6000
+      # El servicio de blockchain real se llama "server" (definido en
+      # blockchain-service/docker-compose.yml), ya no "blockchain-service"
+      - BLOCKCHAIN_SERVICE_URL=http://server:6000
     volumes:
       - ./backend:/app
       - /app/node_modules
     depends_on:
-      - blockchain-service
+      - server
       - llm-service
     networks:
       - certchain-network

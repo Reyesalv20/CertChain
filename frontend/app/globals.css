@@ -1,23 +1,24 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 * {
   box-sizing: border-box;
-  margin: 0;
-  padding: 0;
 }
 
 body {
-  font-family: system-ui, -apple-system, sans-serif;
-  color: #1a1a1a;
-  background: #fafafa;
+  font-family: 'Inter', sans-serif;
+  background: #f8fafb;
+  color: #1a2430;
+  margin: 0;
 }
 
-nav {
-  padding: 1rem 2rem;
-  border-bottom: 1px solid #e5e5e5;
-  font-weight: 600;
+.font-display {
+  font-family: 'DM Serif Display', serif;
 }
 
-main {
-  padding: 2rem;
-  max-width: 720px;
-  margin: 0 auto;
+.font-mono {
+  font-family: 'DM Mono', monospace;
 }
