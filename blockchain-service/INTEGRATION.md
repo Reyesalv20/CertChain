@@ -126,8 +126,11 @@ La revocación queda **on-chain** (`isRevoked = true`); el backend no guarda est
 ### 3.4 Alta de universidad (ente regulador)
 
 ```
+# Dev (ENABLE_DEV_ADMIN=true): el server firma por el regulador
 regulador ──▶ blockchain-service  POST /addIssuer { address, name }
-  (firmado server-side con la cuenta admin; agrega la dirección al registry)
+
+# Producción: el regulador firma client-side (cast o MetaMask), no hay endpoint
+regulador ──▶ anvil: registry.addIssuer(address, name)   (msg.sender = cuenta 0)
 ```
 
 ---
@@ -139,9 +142,9 @@ regulador ──▶ blockchain-service  POST /addIssuer { address, name }
 | `/config` | `GET` | backend / frontend | devuelve direcciones + ABI + `chainId` (no hardcodees nada) |
 | `/verifyCertificate` | `POST` | backend | verificación (view, sin gas) |
 | `/registerCertificate` | `POST` | *(legacy)* | fallback de desarrollo firmado por el server |
-| `/addIssuer` | `POST` | regulador | alta de universidad |
-| `/removeIssuer` | `POST` | regulador | baja de universidad |
-| `/isTrustedIssuer` | `POST` | backend | consulta si una dirección es confiable |
+| `/isTrustedIssuer` | `POST` | backend | consulta si una dirección es confiable (view) |
+| `/addIssuer` | `POST` | regulador *(solo dev)* | alta de universidad — existe si `ENABLE_DEV_ADMIN=true` |
+| `/removeIssuer` | `POST` | regulador *(solo dev)* | baja de universidad — existe si `ENABLE_DEV_ADMIN=true` |
 
 ### `GET /config` — respuesta
 

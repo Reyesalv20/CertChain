@@ -18,8 +18,9 @@ RUN npm ci --omit=dev
 
 COPY --from=build /app/out/ ./out/
 
-# Tu server y el entrypoint (lo vemos en el Paso 4)
+# Tu server (modular) y el entrypoint
 COPY server.js ./
+COPY src/ ./src/
 COPY entrypoint.sh ./
 
 EXPOSE 3000

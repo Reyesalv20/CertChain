@@ -119,18 +119,20 @@ Cada `Certificate` es un struct:
 
 ## La API (endpoints)
 
-Todos los endpoints son `POST` y reciben JSON, salvo `/config` (GET). El server (`server.js`) usa `ethers.js` y tiene **dos wallets**: la del emisor (cuenta 1) y la del admin (cuenta 0).
+Todos los endpoints son `POST` y reciben JSON, salvo `/config` (GET). El server (`server.js`) usa `ethers.js` y tiene **dos wallets**: la del emisor (cuenta 1) y, solo en modo dev, la del admin (cuenta 0).
 
 | Endpoint | Body | Contrato | Wallet | Respuesta OK |
 |---|---|---|---|---|
 | `GET /config` | — | — | — | `{chainId, certificates:{address,abi}, registry:{address,abi}}` |
 | `POST /registerCertificate` *(legacy)* | `{"certHash": "0x..."}` | `AcademicCertificates` | emisor | `{ok, txHash, blockNumber}` |
 | `POST /verifyCertificate` | `{"certHash": "0x..."}` | `AcademicCertificates` | — (view) | `{ok, exists, issuer, issueTimestamp, isRevoked, valid}` |
-| `POST /addIssuer` | `{"address": "0x...", "name": "..."}` | `TrustedIssuersRegistry` | admin | `{ok, txHash, blockNumber}` |
-| `POST /removeIssuer` | `{"address": "0x..."}` | `TrustedIssuersRegistry` | admin | `{ok, txHash, blockNumber}` |
 | `POST /isTrustedIssuer` | `{"address": "0x..."}` | `TrustedIssuersRegistry` | — (view) | `{ok, trusted, name}` |
+| `POST /addIssuer` *(solo dev)* | `{"address": "0x...", "name": "..."}` | `TrustedIssuersRegistry` | admin | `{ok, txHash, blockNumber}` |
+| `POST /removeIssuer` *(solo dev)* | `{"address": "0x..."}` | `TrustedIssuersRegistry` | admin | `{ok, txHash, blockNumber}` |
 
 > `POST /registerCertificate` firma con la cuenta del server. Es un **fallback de desarrollo**: el flujo real es que cada universidad firma en el cliente (MetaMask). Ver `INTEGRATION.md`.
+
+> `POST /addIssuer` y `POST /removeIssuer` solo existen si `ENABLE_DEV_ADMIN=true` (el default en los compose de dev). En producción no se exponen: el **ente regulador firma client-side** con su wallet. Abajo están los comandos `cast` equivalentes.
 
 **Códigos de error:**
 
@@ -267,7 +269,7 @@ curl -X POST http://localhost:6000/verifyCertificate \
   -d '{"certHash":"0x1111111111111111111111111111111111111111111111111111111111111111"}'
 ```
 
-### Endpoints de admin
+### Endpoints de admin (solo dev)
 
 ```bash
 # Consultar si una dirección es emisor confiable
@@ -275,7 +277,7 @@ curl -X POST http://localhost:6000/isTrustedIssuer \
   -H "Content-Type: application/json" \
   -d '{"address":"0x70997970C51812dc3A010C7d01b50e0d17dc79C8"}'
 
-# Agregar un emisor nuevo (cuenta 2 de anvil)
+# Agregar un emisor nuevo (cuenta 2 de anvil) — requiere ENABLE_DEV_ADMIN=true
 curl -X POST http://localhost:6000/addIssuer \
   -H "Content-Type: application/json" \
   -d '{"address":"0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC","name":"Universidad Nacional"}'
@@ -284,6 +286,26 @@ curl -X POST http://localhost:6000/addIssuer \
 curl -X POST http://localhost:6000/removeIssuer \
   -H "Content-Type: application/json" \
   -d '{"address":"0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC"}'
+```
+
+### Alta/baja de emisores con `cast` (el camino de producción)
+
+En producción `addIssuer`/`removeIssuer` no existen en el server: el **ente regulador** firma directo con su wallet (cuenta 0). Copia-pega:
+
+```bash
+# Alta
+cast send 0x5FbDB2315678afecb367f032d93F642f64180aa3 \
+  "addIssuer(address,string)" \
+  0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC "Universidad Nacional" \
+  --rpc-url http://127.0.0.1:8545 \
+  --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+
+# Baja
+cast send 0x5FbDB2315678afecb367f032d93F642f64180aa3 \
+  "removeIssuer(address)" \
+  0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC \
+  --rpc-url http://127.0.0.1:8545 \
+  --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 ```
 
 ### Probar que la validación vive en la cadena (no en Node)
