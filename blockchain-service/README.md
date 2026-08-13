@@ -4,6 +4,8 @@ Microservicio que **emite, verifica y revoca certificados académicos** usando u
 
 > ⚠️ El PDF del título **no** se guarda en la blockchain. Se guarda su **hash** (bytes32), que permite probar que el documento existía en una fecha determinada y que no fue alterado, sin exponer el contenido.
 
+> 📘 Si trabajás en el `backend` o `frontend` y necesitás conectarte a este servicio, leé **[`INTEGRATION.md`](./INTEGRATION.md)**: esquema de la base de datos, contrato de API y flujo de firma multi-universidad.
+
 ---
 
 ## Índice
@@ -22,27 +24,29 @@ Microservicio que **emite, verifica y revoca certificados académicos** usando u
 ## Arquitectura y cómo se conecta todo
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  Contenedores Docker (docker-compose.yml)                       │
-│                                                                 │
-│  ┌──────────┐   1. deploy    ┌──────────┐   2. leer direcciones │
-│  │  anvil   │◄───────────────│  deploy  │──────────────────────┐│
-│  │ (cadena) │  (cuenta 0)    │ (una vez)│  escribe /shared     ││
-│  └────┬─────┘                └──────────┘                     ││
-│       │ RPC (8545)                                            ││
-│  ┌────▼─────┐   3. tx firmada   ┌────────┐                     ││
-│  │  server  │◄──────────────────│  Node  │◄────────────────────┘│
-│  │ (cuenta 1)│  ethers.js        └────────┘  lee CONTRACT_ADDRESS │
-│  └──────────┘                    Express API (puerto 6000)       │
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│  Contenedores Docker (docker-compose.yml)                        │
+│                                                                  │
+│  ┌──────────┐   1. deploy    ┌──────────┐   2. leer direcciones  │
+│  │  anvil   │◄───────────────│  deploy  │───────────────────────┐│
+│  │ (cadena) │  (cuenta 0)    │ (una vez)│  escribe /shared      ││
+│  └────┬─────┘                └──────────┘                      ││
+│       │ RPC (8545)                                             ││
+│  ┌────▼─────────────┐   tx firmada    ┌─────────────────────┐  ││
+│  │  universidades   │◄────────────────│  blockchain-service │◄─┘│
+│  │  (firman con su  │   (MetaMask)    │  Express API :6000  │   │
+│  │   wallet)        │                 │  + fallback de firma │   │
+│  └──────────────────┘                 └─────────────────────┘   │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
-Los dos actores (la clave de todo el diseño):
+Los **roles** (la clave de todo el diseño):
 
-| Actor | Cuenta de anvil | Rol |
-|---|---|---|
-| **Ente regulador** | cuenta 0 (`0xf39F...`) | Despliega contratos y administra la lista de emisores confiables |
-| **Institución (emisor)** | cuenta 1 (`0x7099...`) | El server firma los certificados con esta cuenta |
+| Rol | Quién es | Cuenta | Qué hace |
+|---|---|---|---|
+| **Ente regulador** | backoffice del gobierno | cuenta 0 (`0xf39F...`) | Despliega los contratos y da de alta/baja a las universidades (`/addIssuer`, `/removeIssuer`) |
+| **Universidad (emisor)** | cada institución | su propia wallet (MetaMask) | Firma sus certificados (`registerCertificate`) y revocaciones (`revokeCertificate`) |
+| **Server (fallback)** | el `blockchain-service` | cuenta 1 (`0x7099...`) | Firma `/registerCertificate` solo como fallback de desarrollo |
 
 La **conexión entre contratos** es on-chain: `AcademicCertificates` guarda la dirección de `TrustedIssuersRegistry` (fijada en su constructor) y le pregunta, en cada `registerCertificate`, si quien firma es un emisor confiable:
 
@@ -115,15 +119,18 @@ Cada `Certificate` es un struct:
 
 ## La API (endpoints)
 
-Todos los endpoints son `POST` y reciben JSON. El server (`server.js`) usa `ethers.js` y tiene **dos wallets**: la del emisor (cuenta 1) y la del admin (cuenta 0).
+Todos los endpoints son `POST` y reciben JSON, salvo `/config` (GET). El server (`server.js`) usa `ethers.js` y tiene **dos wallets**: la del emisor (cuenta 1) y la del admin (cuenta 0).
 
 | Endpoint | Body | Contrato | Wallet | Respuesta OK |
 |---|---|---|---|---|
-| `POST /registerCertificate` | `{"certHash": "0x..."}` | `AcademicCertificates` | emisor | `{ok, txHash, blockNumber}` |
+| `GET /config` | — | — | — | `{chainId, certificates:{address,abi}, registry:{address,abi}}` |
+| `POST /registerCertificate` *(legacy)* | `{"certHash": "0x..."}` | `AcademicCertificates` | emisor | `{ok, txHash, blockNumber}` |
 | `POST /verifyCertificate` | `{"certHash": "0x..."}` | `AcademicCertificates` | — (view) | `{ok, exists, issuer, issueTimestamp, isRevoked, valid}` |
 | `POST /addIssuer` | `{"address": "0x...", "name": "..."}` | `TrustedIssuersRegistry` | admin | `{ok, txHash, blockNumber}` |
 | `POST /removeIssuer` | `{"address": "0x..."}` | `TrustedIssuersRegistry` | admin | `{ok, txHash, blockNumber}` |
 | `POST /isTrustedIssuer` | `{"address": "0x..."}` | `TrustedIssuersRegistry` | — (view) | `{ok, trusted, name}` |
+
+> `POST /registerCertificate` firma con la cuenta del server. Es un **fallback de desarrollo**: el flujo real es que cada universidad firma en el cliente (MetaMask). Ver `INTEGRATION.md`.
 
 **Códigos de error:**
 
@@ -142,32 +149,96 @@ Secuencia de despliegue (la ejecuta `deploy.sh`, una sola vez):
 ```
 1. deploy TrustedIssuersRegistry      → admin = cuenta 0 (ente regulador)
 2. deploy AcademicCertificates(addr)  → guarda la referencia al registry
-3. admin → addIssuer(cuenta 1, "Universidad de Vanguardia")
+3. admin → addIssuer(cuenta 1, "Universidad de Vanguardia")   ← emisor de test (fallback)
 4. guardar ambas direcciones en /shared  (el server las lee de ahí)
 ```
 
-Después, en runtime, cuando un estudiante/envía un certificado:
+En runtime hay **dos caminos de firma**:
+
+**A) Firma en el cliente (el flujo real, multi-universidad):**
+
+```
+universidad (MetaMask) → registerCertificate(certHash)
+  → msg.sender = su wallet
+  → el contrato pregunta: ¿isTrustedIssuer(0xUNI...)?  → sí (la dio de alta el regulador)
+  → guarda certificates[hash] = {issuer: 0xUNI..., timestamp, isRevoked: false}
+```
+
+Cada universidad tiene su propia wallet; el regulador la agrega al registry con `/addIssuer`. El server **no** firma por ellas.
+
+**B) Firma en el server (fallback de desarrollo):**
 
 ```
 POST /registerCertificate
-  → server firma la tx con la cuenta 1 (emisor)
+  → server firma la tx con la cuenta 1 (emisor de test)
   → el contrato pregunta: ¿isTrustedIssuer(0x7099...)?  → sí
   → guarda certificates[hash] = {issuer: 0x7099..., timestamp, isRevoked: false}
   → responde txHash + blockNumber
+```
 
+**Verificación (común a ambos caminos):**
+
+```
 POST /verifyCertificate
-  → el contrato lee certificates[hash] (sin gas)
+  → el contrato lee certificates[hash] (sin gas, view)
   → devuelve exists=true, issuer, timestamp, isRevoked
   → el server agrega valid = exists && !isRevoked
 ```
 
-El orden de despliegue **importa**: `AcademicCertificates` necesita la dirección del registry en su constructor, así que primero va el registry.
+El orden de despliegue **importa**: `AcademicCertificates` necesita la dirección del registry en su constructor, así que primero va el registry. El flujo end-to-end con backend y frontend está en `INTEGRATION.md`.
 
 ---
 
 ## Probar con Docker + curl
 
-### Levantar el stack
+Hay **dos formas** de correrlo:
+
+1. **Standalone** (solo este servicio): desde `blockchain-service/`, `docker compose up -d --build` usa el `docker-compose.yml` local (`anvil + deploy + server`).
+2. **Desde el compose raíz** (integrado con el resto del stack): desde la raíz del repo, `docker compose up -d --build blockchain-service` usa el `docker-compose.yml` raíz, que trae `anvil + deploy + blockchain-service` (el `depends_on` levanta los dos primeros). No baja frontend/backend/llm.
+
+> No corras ambos a la vez: comparten los puertos `8545` y `6000`.
+
+### Levantar desde el compose raíz (paso a paso)
+
+Paso a paso para probar el servicio levantado desde el `docker-compose.yml` de la **raíz del repo** (no desde `blockchain-service/`):
+
+```bash
+# 1. Levantar anvil + deploy + blockchain-service (el depends_on arranca los otros dos)
+docker compose up -d --build blockchain-service
+
+# 2. Ver que deploy terminó (esperá ver "List" al final: significa que escribió las direcciones)
+docker compose logs -f deploy
+
+# 3. Ver que el server está arriba (esperá "Server en http://localhost:6000")
+docker compose logs -f blockchain-service
+```
+
+Ahora el servicio responde en `http://localhost:6000` y la cadena en `http://localhost:8545`:
+
+```bash
+# Config: devuelve direcciones + ABI + chainId (para que otros servicios no hardcodeen nada)
+curl -s http://localhost:6000/config
+
+# Registrar un certificado (fallback: firma el server con la cuenta emisora)
+curl -s -X POST http://localhost:6000/registerCertificate \
+  -H "Content-Type: application/json" \
+  -d '{"certHash":"0x1111111111111111111111111111111111111111111111111111111111111111"}'
+
+# Verificarlo
+curl -s -X POST http://localhost:6000/verifyCertificate \
+  -H "Content-Type: application/json" \
+  -d '{"certHash":"0x1111111111111111111111111111111111111111111111111111111111111111"}'
+```
+
+Para apagar (con `-v` se borra la cadena efímera → la próxima vez redeploya desde cero):
+
+```bash
+docker compose down -v
+```
+
+> La colección de Postman (`blockchain-service.postman_collection.json`) funciona igual levantando desde la raíz: mismo puerto `6000`, mismos endpoints.
+
+### Levantar el stack (standalone)
 
 ```bash
 docker compose up -d --build    # primera vez
@@ -366,3 +437,5 @@ Los mismos curls de la sección [Probar con Docker + curl](#probar-con-docker--c
 6. **El nonce y las transacciones rápidas.** Mandar varias tx seguidas con el mismo wallet puede chocar en el nonce ("nonce has already been used"). Solución: envolver el wallet en `ethers.NonceManager`.
 
 7. **Las claves son de desarrollo**: las private keys de anvil están hardcodeadas a propósito (stack 100% local). Jamás usarlas fuera de un entorno de prueba.
+
+8. **Firma en cliente sin tocar contratos.** El paso a firma multi-universidad (cada institución firma con MetaMask) no exigió cambios en los smart contracts: `msg.sender` ya es la wallet de quien firma, y el `require(isTrustedIssuer(msg.sender))` hace el resto. La clave es que el regulador dé de alta la dirección de cada universidad en el registry.

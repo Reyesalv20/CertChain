@@ -12,6 +12,8 @@ const issuerWallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
 const issuerSigner = new ethers.NonceManager(issuerWallet);
 const certArtifact = require("./out/CertificateRegistry.sol/AcademicCertificates.json");
 const certContract = new ethers.Contract(process.env.CONTRACT_ADDRESS, certArtifact.abi, issuerSigner);
+// Contrato de solo lectura (sin signer): para las views (verify) no hace falta firmar.
+const certContractReadOnly = new ethers.Contract(process.env.CONTRACT_ADDRESS, certArtifact.abi, provider);
 
 // Admin (cuenta 0)
 const adminWallet = new ethers.Wallet(process.env.ADMIN_PRIVATE_KEY, provider);
@@ -60,7 +62,7 @@ app.post('/verifyCertificate', async (req, res) => {
 
     try {
         const [exists, issuer, issueTimestamp, isRevoked] = 
-            await certContract.verifyCertificate(certHash);
+            await certContractReadOnly.verifyCertificate(certHash);
 
         res.status(200).json({ ok: true, exists, issuer,
             issueTimestamp: issueTimestamp.toString(),
@@ -136,6 +138,20 @@ app.post('/isTrustedIssuer', async (req, res) => {
         res.status(status).json({ ok:false, error: reason });
     }
 
+});
+
+// ── Config para otros servicios ──────────────────
+app.get('/config', async (req, res) => {
+    try {
+        const chainId = (await provider.getNetwork()).chainId;
+        res.status(200).json({
+            chainId: chainId.toString(),
+            certificates: { address: process.env.CONTRACT_ADDRESS, abi: certArtifact.abi },
+            registry: { address: process.env.TRUSTED_ISSUERS_ADDRESS, abi: registryArtifact.abi }
+        });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: err.message });
+    }
 });
 
 const PORT = process.env.PORT || 6000;
