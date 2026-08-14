@@ -69,7 +69,7 @@ Gracias a `depends_on` en `docker-compose.yml`, cada servicio arranca junto con 
 # Compañero de backend (arranca backend + blockchain-service + llm-service + ollama, NO frontend)
 docker compose up backend
 
-# Compañero de blockchain (arranca solo blockchain-service, sin dependencias)
+# Compañero de blockchain (arranca anvil + deploy + blockchain-service)
 docker compose up blockchain-service
 
 # Compañero de LLM/RAG (arranca llm-service + ollama)

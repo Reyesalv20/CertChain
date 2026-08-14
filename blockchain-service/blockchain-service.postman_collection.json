@@ -1,0 +1,141 @@
+{
+  "info": {
+    "name": "CertChain - blockchain-service",
+    "description": "Endpoints del microservicio blockchain-service (puerto 6000). Registra y verifica certificados en la blockchain, y administra emisores confiables.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:6000",
+      "type": "string"
+    },
+    {
+      "key": "certHash",
+      "value": "0x1111111111111111111111111111111111111111111111111111111111111111",
+      "type": "string"
+    },
+    {
+      "key": "issuerAddress",
+      "value": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      "type": "string"
+    },
+    {
+      "key": "newIssuerAddress",
+      "value": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Emisor",
+      "item": [
+        {
+          "name": "registerCertificate",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"certHash\": \"{{certHash}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/registerCertificate",
+              "host": ["{{baseUrl}}"],
+              "path": ["registerCertificate"]
+            },
+            "description": "Registra un certificado en la blockchain. Solo funciona si quien firma (el server, cuenta 1) es un emisor confiable. Devuelve txHash y blockNumber."
+          },
+          "response": []
+        },
+        {
+          "name": "verifyCertificate",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"certHash\": \"{{certHash}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/verifyCertificate",
+              "host": ["{{baseUrl}}"],
+              "path": ["verifyCertificate"]
+            },
+            "description": "Verifica un certificado (lectura sin gas). Devuelve exists, issuer, issueTimestamp, isRevoked y valid (exists && !isRevoked)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "isTrustedIssuer",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"address\": \"{{issuerAddress}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/isTrustedIssuer",
+              "host": ["{{baseUrl}}"],
+              "path": ["isTrustedIssuer"]
+            },
+            "description": "Consulta si una dirección es un emisor confiable y devuelve su nombre."
+          },
+          "response": []
+        },
+        {
+          "name": "addIssuer",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"address\": \"{{newIssuerAddress}}\",\n  \"name\": \"Universidad Nacional\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/addIssuer",
+              "host": ["{{baseUrl}}"],
+              "path": ["addIssuer"]
+            },
+            "description": "Agrega un emisor confiable. Solo el admin (cuenta 0) puede hacerlo."
+          },
+          "response": []
+        },
+        {
+          "name": "removeIssuer",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"address\": \"{{newIssuerAddress}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/removeIssuer",
+              "host": ["{{baseUrl}}"],
+              "path": ["removeIssuer"]
+            },
+            "description": "Elimina un emisor de la lista de confiables. Solo el admin (cuenta 0) puede hacerlo."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

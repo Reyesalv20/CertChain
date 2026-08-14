@@ -11,8 +11,6 @@ services:
     # solo acepta localhost, y los otros contenedores no podrían conectarse)
     ports:
       - "8545:8545"   # host:contenedor → seguís usando `cast` desde tu terminal
-    networks:
-      - certchain-network   # misma red que el resto del proyecto (definida en el docker-compose.yml raíz)
 
   # ---- 2) El despliegue (se ejecuta UNA vez y termina) ----
   deploy:
@@ -24,6 +22,8 @@ services:
     # efímero de desarrollo, corremos como root sin drama.
     user: root
     working_dir: /app
+    environment:
+      ISSUER_PRIVATE_KEY: 0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d
     volumes:
       - ./contracts/src:/app/src         # el contrato (montado en vivo)
       - ./contracts/foundry.toml:/app/foundry.toml
@@ -31,8 +31,6 @@ services:
       - shared:/shared              # volumen compartido: escribe la dirección
     depends_on:
       - anvil
-    networks:
-      - certchain-network
 
   # ---- 3) El server Express ----
   server:
@@ -42,7 +40,9 @@ services:
       # Dentro de la red Docker, "anvil" es el nombre del host del
       # contenedor anvil — así el server encuentra la blockchain
       RPC_URL: http://anvil:8545
-      PRIVATE_KEY: 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+      PRIVATE_KEY: 0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d 
+      ADMIN_PRIVATE_KEY: 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+      ENABLE_DEV_ADMIN: "true"
       PORT: 6000
     volumes:
       - shared:/shared              # lee CONTRACT_ADDRESS de acá
@@ -52,13 +52,6 @@ services:
     ports:
       - "6000:6000"   # el server escucha 3000 adentro, 4000 afuera
                       # (3000 en tu host está ocupado por la app de OpenWork)
-    networks:
-      - certchain-network   # así "backend" (en el compose raíz) lo encuentra como http://server:6000
-
-# NOTA: no hace falta declarar "certchain-network" aquí abajo. Como este
-# archivo se une al principal con "include:", la red ya queda definida
-# una sola vez en el docker-compose.yml de la raíz — aquí solo nos unimos
-# a ella por nombre en cada servicio.
 
 volumes:
   shared:   # el volumen compartido entre deploy y server
