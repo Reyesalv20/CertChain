@@ -9,7 +9,8 @@ import { Suspense, useState, type FormEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ShieldIcon } from '@/components/icons';
 import { CertSeal } from '@/components/CertSeal';
-import { api, ApiError } from '@/lib/api';
+import { createClient } from '@/lib/supabase/client';
+//import { api, ApiError } from '@/lib/api';
 
 // useSearchParams necesita un límite <Suspense> para no des-optimizar
 // el resto de la página durante el build estático de Next.js.
@@ -30,24 +31,38 @@ function LoginForm() {
   const [error, setError] = useState('');
 
   async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    if (!email || !password) {
-      setError('Por favor ingresa tus credenciales.');
+  e.preventDefault();
+  if (!email || !password) {
+    setError('Por favor ingresa tus credenciales.');
+    return;
+  }
+  setLoading(true);
+  setError('');
+
+  try {
+    const supabase = createClient();
+    const { data, error: authError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    console.log('login result:', data, authError); // debug temporal, quítalo después
+
+    if (authError) {
+      setError(authError.message);
       return;
     }
-    setLoading(true);
-    setError('');
-    try {
-      await api.login({ email, password });
-      const redirectTo = searchParams.get('redirect') || '/dashboard';
-      router.push(redirectTo);
-      router.refresh();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No se pudo iniciar sesión.');
-    } finally {
-      setLoading(false);
-    }
+
+    const redirectTo = searchParams.get('redirect') || '/verificar';
+    router.push(redirectTo);
+    router.refresh();
+  } catch (err) {
+    console.error('excepción no controlada en login:', err);
+    setError('Ocurrió un error inesperado al iniciar sesión.');
+  } finally {
+    setLoading(false);
   }
+}
 
   return (
     <div className="flex" style={{ minHeight: 'calc(100vh - 64px)' }}>
