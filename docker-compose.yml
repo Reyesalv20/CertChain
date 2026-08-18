@@ -112,7 +112,16 @@ services:
       - "5000:5000"
     environment:
       - PORT=5000
-      - OLLAMA_URL=http://ollama:11434
+      # Por defecto apunta al contenedor local de abajo. Para usar Ollama
+      # corriendo en otra máquina (ej. túnel de Cloudflare/ngrok), poné
+      # OLLAMA_URL en tu .env de la raíz (ver .env.example) y este valor por
+      # defecto queda sin usarse.
+      - OLLAMA_URL=${OLLAMA_URL:-http://ollama:11434}
+      - OLLAMA_MODEL_LLAMA3=${OLLAMA_MODEL_LLAMA3:-llama3}
+      - OLLAMA_MODEL_MISTRAL=${OLLAMA_MODEL_MISTRAL:-mistral}
+      # TODO (backend): endpoint todavía no existe, ver llm-service/RFID_CONTRACT.md
+      - CERTIFICADOS_SERVICE_URL=http://backend:4000
+      - MOCK_CERTIFICADOS=${MOCK_CERTIFICADOS:-true}
     volumes:
       - ./llm-service:/app
     depends_on:
