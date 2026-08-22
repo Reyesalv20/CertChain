@@ -3,11 +3,11 @@ pragma solidity ^0.8.20;
 
 interface ITrustedIssuersRegistry {
     function isTrustedIssuer(address _issuer) external view returns (bool);
+    function admin() external view returns (address);
 }
 
 contract AcademicCertificates {
     struct Certificate {
-        bytes32 certHash;       // Hash SHA-256 del PDF + Metadata
         address issuer;         // Dirección pública (Wallet) de la Universidad
         uint256 issueTimestamp; // Fecha y hora Unix de emisión
         bool isRevoked;         // Estado de revocación (false por defecto)
@@ -29,7 +29,6 @@ contract AcademicCertificates {
         require(certificates[_certHash].issueTimestamp == 0, "El certificado ya fue registrado");
 
         certificates[_certHash] = Certificate({
-            certHash: _certHash,
             issuer: msg.sender,
             issueTimestamp: block.timestamp,
             isRevoked: false
@@ -56,7 +55,7 @@ contract AcademicCertificates {
     function revokeCertificate(bytes32 _certHash) external {
         Certificate storage cert = certificates[_certHash];
         require(cert.issueTimestamp != 0, "El certificado no existe");
-        require(cert.issuer == msg.sender, "Solo el emisor original puede revocar este titulo");
+        require(cert.issuer == msg.sender || trustedRegistry.admin() == msg.sender, "Solo el emisor original o el ente regulador puede revocar este titulo");
         
         cert.isRevoked = true;
         emit CertificateRevoked(_certHash, msg.sender);

@@ -73,7 +73,7 @@ contract AcademicCertificatesTest is Test {
 
     }
 
-    function test_ElRegistryEsElCorrecto() public {
+    function test_ElRegistryEsElCorrecto() public view {
         assertEq(address(certs.trustedRegistry()), address(registry));
     }
 
@@ -120,8 +120,21 @@ contract AcademicCertificatesTest is Test {
         vm.stopPrank();
 
         vm.prank(random);
-        vm.expectRevert("Solo el emisor original puede revocar este titulo");
+        vm.expectRevert("Solo el emisor original o el ente regulador puede revocar este titulo");
         certs.revokeCertificate(cert);
+    }
+
+    function test_ReguladorPuedeRevocar() public {
+        bytes32 cert = bytes32(uint256(1));
+
+        vm.prank(issuer);
+        certs.registerCertificate(cert);
+
+        vm.prank(admin);
+        certs.revokeCertificate(cert);
+
+        (,,, bool isRevoked_) = certs.verifyCertificate(cert);
+        assertTrue(isRevoked_);
     }
 }
 

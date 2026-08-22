@@ -47,4 +47,19 @@ contract TrustedIssuersRegistryTest is Test {
 
         vm.stopPrank();
     }
+
+    function test_AdminPuedeTransferir() public {
+        address nuevoAdmin = address(0xCAFE);
+
+        vm.prank(admin);
+        registry.transferAdmin(nuevoAdmin);
+
+        assertEq(registry.admin(), nuevoAdmin);
+    }
+
+    function test_NoAdminNoPuedeTransferir() public {
+        vm.prank(university);
+        vm.expectRevert("Solo el administrador puede transferir");
+        registry.transferAdmin(address(0xB0B));
+    }
 }
