@@ -1,10 +1,12 @@
 const express = require("express");
+const cors = require("cors");
 const config = require("./src/config");
 const blockchain = require("./src/blockchain");
 const { createCertificatesRouter } = require("./src/routes/certificates");
 const { createRegistryRouter } = require("./src/routes/registry");
 
 const app = express();
+app.use(cors());
 app.use(express.json());
 
 app.use(
