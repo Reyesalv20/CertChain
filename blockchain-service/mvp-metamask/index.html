@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CertChain — MVP MetaMask</title>
+  </head>
+  <body>
+    <div class="container">
+      <nav class="nav">
+        <a href="/" class="active">App</a>
+        <a href="/explorer.html">Explorer</a>
+      </nav>
+
+      <header>
+        <h1>CertChain <span class="badge">MVP</span></h1>
+        <p class="subtitle">Emisión y verificación de certificados académicos firmados con MetaMask</p>
+        <div class="wallet-bar">
+          <button id="connect" class="btn btn-primary">Conectar wallet</button>
+          <span id="account" class="account">Sin conectar</span>
+        </div>
+      </header>
+
+      <section class="card">
+        <h2>Certificado</h2>
+        <label for="certHash">Hash del certificado (bytes32)</label>
+        <input id="certHash" placeholder="0x + 64 caracteres hex" />
+        <div class="chips">
+          <span class="chips-label">Ejemplos:</span>
+          <button class="chip" data-fill="certHash" data-value="0x1111111111111111111111111111111111111111111111111111111111111111">0x1111…</button>
+          <button class="chip" data-fill="certHash" data-value="0x2222222222222222222222222222222222222222222222222222222222222222">0x2222…</button>
+          <button class="chip" data-fill="certHash" data-value="0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa">0xaaaa…</button>
+          <button class="chip" data-fill="certHash" data-value="0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb">0xbbbb…</button>
+        </div>
+        <div class="row">
+          <button id="register" class="btn">Registrar <small>(firma)</small></button>
+          <button id="revoke" class="btn btn-danger">Revocar <small>(firma)</small></button>
+          <button id="verify" class="btn btn-ghost">Verificar</button>
+        </div>
+        <pre id="certResult" class="result"></pre>
+      </section>
+
+      <section class="card">
+        <h2>Emisor</h2>
+        <label for="issuerAddress">Dirección del emisor</label>
+        <input id="issuerAddress" placeholder="0x + 40 caracteres hex" />
+        <div class="chips">
+          <span class="chips-label">Ejemplos:</span>
+          <button class="chip" data-fill="issuerAddress" data-value="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266">0xf39F… (admin)</button>
+          <button class="chip" data-fill="issuerAddress" data-value="0x70997970C51812dc3A010C7d01b50e0d17dc79C8">0x7099… (emisor)</button>
+          <button class="chip" data-fill="issuerAddress" data-value="0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC">0x3C44… (libre)</button>
+          <button class="chip" data-fill="issuerAddress" data-value="0x90F79bf6EB2c4f870365E785982E1f101E93b906">0x90F7… (libre)</button>
+        </div>
+        <label for="issuerName">Nombre de la universidad</label>
+        <input id="issuerName" placeholder="Ej. Universidad de Vanguardia" />
+        <div class="row">
+          <button id="addIssuer" class="btn">Agregar emisor <small>(firma, admin)</small></button>
+          <button id="isTrusted" class="btn btn-ghost">¿Es confiable?</button>
+        </div>
+        <pre id="issuerResult" class="result"></pre>
+      </section>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

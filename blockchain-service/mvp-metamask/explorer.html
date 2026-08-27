@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CertChain — Explorer</title>
+  </head>
+  <body>
+    <div class="container container--wide">
+      <nav class="nav">
+        <a href="/">App</a>
+        <a href="/explorer.html" class="active">Explorer</a>
+      </nav>
+
+      <header>
+        <h1>Explorer <span class="badge">Cadena</span></h1>
+        <p class="subtitle" id="latest">Cargando…</p>
+      </header>
+
+      <div class="two-col">
+        <section class="card">
+          <div class="explorer-head">
+            <h2>Últimos bloques</h2>
+            <label class="toggle">
+              <input type="checkbox" id="autoRefresh" checked />
+              Auto-refresh (4s)
+            </label>
+          </div>
+          <div id="blocks" class="blocks"></div>
+        </section>
+
+        <section class="card">
+          <h2>Bloque seleccionado</h2>
+          <p class="hint">Click en un bloque de la izquierda para ver su detalle. Fijate que su <code>parent hash</code> es el <code>hash</code> del bloque anterior: esa es la cadena inmutable.</p>
+          <div id="blockDetail" class="detail"><em>Ningún bloque seleccionado.</em></div>
+        </section>
+      </div>
+
+      <section class="card">
+        <h2>Transacción</h2>
+        <input id="txHash" placeholder="0x + 64 caracteres hex (tx hash)" />
+        <div class="row">
+          <button id="viewTxBtn" class="btn btn-ghost">Ver transacción</button>
+        </div>
+        <div id="txDetail" class="detail"><em>Pegá un hash o click en una tx de un bloque.</em></div>
+      </section>
+    </div>
+
+    <script type="module" src="/src/explorer.js"></script>
+  </body>
+</html>

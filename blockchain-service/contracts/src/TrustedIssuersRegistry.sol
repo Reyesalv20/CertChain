@@ -8,6 +8,7 @@ contract TrustedIssuersRegistry {
 
     event IssuerAdded(address indexed issuer, string name);
     event IssuerRemoved(address indexed issuer);
+    event AdminTransferred(address indexed previousAdmin, address indexed newAdmin);
 
     constructor() {
         admin = msg.sender; // Ente regulador / Ente gubernamental
@@ -27,5 +28,14 @@ contract TrustedIssuersRegistry {
         isTrustedIssuer[_issuer] = false;
         delete issuerName[_issuer];
         emit IssuerRemoved(_issuer);
+    }
+
+    function transferAdmin(address _newAdmin) external {
+        require(msg.sender == admin, "Solo el administrador puede transferir");
+        require(_newAdmin != address(0), "Admin invalido");
+        
+        address previousAdmin = admin;
+        admin = _newAdmin;
+        emit AdminTransferred(previousAdmin, _newAdmin);
     }
 }
