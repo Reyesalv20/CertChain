@@ -53,7 +53,7 @@ function LoginForm() {
       return;
     }
 
-    const redirectTo = searchParams.get('redirect') || '/verificar';
+    const redirectTo = searchParams.get('redirect') || '/dashboard';
     router.push(redirectTo);
     router.refresh();
   } catch (err) {
