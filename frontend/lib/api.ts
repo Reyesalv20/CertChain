@@ -13,7 +13,7 @@ import type {
   ActividadReciente,
   Certificado,
   CredencialesLogin,
-  DatosRegistroCertificado,
+  DatosConfirmacionCertificado,
   EstadisticasDashboard,
   Institucion,
   ResultadoVerificacion,
@@ -89,10 +89,10 @@ export const api = {
   // multipart/form-data con el campo "archivo" (PDF).
   // El backend guarda el archivo y devuelve los datos que se prellenan en el formulario
   // (puede ser extracción automática o, si no es viable, valores vacíos para llenado manual).
-  subirCertificado(archivo: File): Promise<SubidaCertificado> {
+  procesarCertificado(archivo: File): Promise<SubidaCertificado> {
     const formData = new FormData();
     formData.append('archivo', archivo);
-    return apiFetch('/certificados/subir', {
+    return apiFetch('/certificados/procesar', {
       method: 'POST',
       body: formData,
     });
@@ -101,8 +101,8 @@ export const api = {
   // POST /certificados (protegido)
   // Registra el certificado: genera hash SHA-256 y lo inscribe en blockchain
   // (el backend llama internamente a blockchain-service).
-  registrarCertificado(datos: DatosRegistroCertificado): Promise<Certificado> {
-    return apiFetch('/certificados', {
+  confirmarCertificado(datos: DatosConfirmacionCertificado): Promise<Certificado> {
+    return apiFetch('/certificados/confirmar', {
       method: 'POST',
       body: JSON.stringify(datos),
     });

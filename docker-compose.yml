@@ -14,6 +14,8 @@ services:
       - BACKEND_INTERNAL_URL=http://backend:4000
       # RPC de la blockchain local: la usa el BROWSER (MetaMask) para firmar tx
       - NEXT_PUBLIC_RPC_URL=http://localhost:8545
+      # El navegador fetchea /config del blockchain-service (address + ABI) para firmar
+      - NEXT_PUBLIC_BLOCKCHAIN_SERVICE_URL=http://localhost:6000
       # Sin esto, la primera vez que corre "next dev" muestra el prompt de
       # telemetría y, al no haber una terminal interactiva en el contenedor,
       # el proceso se queda esperando input y termina solo (exit code 0).

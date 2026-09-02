@@ -5,9 +5,11 @@ sobre `NEXT_PUBLIC_BACKEND_URL` (`http://localhost:4000` en local). Ninguno exis
 todavía en `backend/` (solo está `GET /health`). Esto es lo que hay que implementar
 en el backend (NestJS) para que el frontend funcione de punta a punta.
 
-Recordatorio de arquitectura (ver README raíz): el frontend **nunca** llama directo
-a `blockchain-service` ni a `llm-service`. Todo pasa por el backend, que internamente
-usa `BLOCKCHAIN_SERVICE_URL` y `LLM_SERVICE_URL`.
+Recordatorio de arquitectura (ver README raíz): el frontend llama al `backend` para
+todo lo que es datos/negocio (login, certificados, chat). La **única excepción** es la
+configuración de los contratos: para firmar con MetaMask, el frontend hace fetch
+directo a `blockchain-service GET /config` (dirección + ABI), vía
+`NEXT_PUBLIC_BLOCKCHAIN_SERVICE_URL`.
 
 ---
 
@@ -33,20 +35,25 @@ Limpia la cookie `certchain_token` (`Set-Cookie` con `Max-Age=0`). Respuesta 204
 
 ---
 
-## Emisión de certificados (protegido — requiere cookie válida)
+## Emisión de certificados (protegido)
 
-### `POST /certificados/subir`
+El flujo de emisión ahora es **firma en cliente**: el backend **ya no** firma la
+transacción de blockchain — la firma la institución desde el navegador con MetaMask.
+El backend solo (1) procesa el PDF y calcula el hash, y (2) persiste la metadata una
+vez que la firma quedó confirmada on-chain.
+
+### 1. `POST /certificados/procesar`
 `multipart/form-data` con el campo `archivo` (PDF).
 
-El backend guarda el archivo y devuelve los datos que se van a prellenar en el
-formulario. Si todavía no hay extracción automática (OCR/parseo del PDF), está bien
-devolver los campos vacíos para que la institución los llene a mano — lo importante
-es el `subidaId` para el siguiente paso.
+El backend guarda el archivo, extrae (o mockea) la metadata y calcula el hash del
+certificado. **No escribe nada en la blockchain ni en la DB todavía** — solo devuelve
+los datos para prellenar el formulario y el `hash` que el frontend va a firmar.
 
 Respuesta 200/201:
 ```json
 {
   "subidaId": "...",
+  "hash": "0x...",
   "nombreEstudiante": "",
   "carrera": "",
   "fechaEmision": "",
@@ -54,16 +61,33 @@ Respuesta 200/201:
 }
 ```
 
-### `POST /certificados`
+> El `hash` es **mock** por ahora; después será el real (keccak256 de metadata + PDF,
+> ver `blockchain-service/INTEGRATION.md`).
+
+### 2. Firma en cliente (no es un endpoint)
+
+El frontend llama a `registerCertificate(hash)` del contrato `AcademicCertificates`
+firmando con la wallet de la institución (MetaMask). El contrato valida on-chain que
+`msg.sender` sea un emisor confiable. El frontend obtiene la dirección + ABI desde
+`blockchain-service GET /config`.
+
+### 3. `POST /certificados/confirmar`
 Body:
 ```json
-{ "subidaId": "...", "nombreEstudiante": "...", "carrera": "...", "fechaEmision": "2024-06-15" }
+{
+  "subidaId": "...",
+  "hash": "0x...",
+  "txHash": "0x...",
+  "nombreEstudiante": "...",
+  "carrera": "...",
+  "fechaEmision": "2024-06-15",
+  "archivoNombre": "certificado.pdf"
+}
 ```
 
-El backend genera el hash SHA-256 del documento y llama a `blockchain-service`
-(`POST /certificados` en ese servicio) para registrarlo. Responde con el certificado
-ya registrado:
-
+El backend **verifica** que la transacción exista on-chain (llamando a
+`blockchain-service POST /verifyCertificate { certHash }`) y recién entonces persiste
+la metadata + hash en la DB. Responde con el certificado persistido:
 ```json
 {
   "id": "...",
@@ -73,6 +97,7 @@ ya registrado:
   "fechaEmision": "2024-06-15",
   "institucion": "Universidad Autónoma de Xalapa",
   "hash": "0x...",
+  "txHash": "0x...",
   "rfid": null,
   "estado": "registrado"
 }
@@ -120,8 +145,8 @@ existe como placeholder) junto con el contexto del certificado. Respuesta:
 
 | Quién | Qué necesita construir |
 |---|---|
-| **Backend (NestJS)** | Los 7 endpoints de arriba: `/auth/login`, `/auth/logout`, `/certificados/subir`, `/certificados` (POST), `/certificados/recientes`, `/certificados/estadisticas`, `/certificados/verificar`, `/chat`. Incluye CORS con credentials y la cookie httpOnly del login. |
-| **blockchain-service** | Ya tiene los stubs `POST /certificados` y `GET /certificados/:hash/verificar` (devuelven 501) — falta la integración real con el contrato (ya hay `blockchain-service/contracts`). El backend depende de esto para el paso de registro. |
+| **Backend (NestJS)** | Los endpoints: `/auth/login`, `/auth/logout`, `/certificados/procesar`, `/certificados/confirmar`, `/certificados/recientes`, `/certificados/estadisticas`, `/certificados/verificar`, `/chat`. En `/confirmar`, verifica on-chain (vía `blockchain-service`) antes de persistir. |
+| **blockchain-service** | Ya expone `GET /config` (dirección + ABI, para que el frontend firme) y `POST /verifyCertificate` (para que el backend confirme). |
 | **llm-service** | Ya tiene el stub `POST /chat` — falta el RAG real. El backend solo reenvía la pregunta. |
 
 El frontend ya maneja loading, error y estados vacíos para cada llamada, así que en

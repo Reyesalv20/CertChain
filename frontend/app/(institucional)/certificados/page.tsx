@@ -1,14 +1,17 @@
 'use client';
 
 // Ruta protegida: "/certificados" (requiere cookie certchain_token, ver middleware.ts)
-// Flujo en dos pasos, ambos contra el backend:
-//   1. POST /certificados/subir   -> sube el PDF, el backend devuelve datos prellenados
-//   2. POST /certificados         -> genera el hash y registra en blockchain
+// Flujo en tres pasos:
+//  1. POST /certificados/procesar -> backend devuelve OCR + hash (mock)
+//  2. firma registerCertificate(hash) con MetaMask -> se registra on-chain
+//  3. POST /certificados/confirmar -> backend persiste metadata + hash en la DB
 
 import { useEffect, useRef, useState } from 'react';
 import { BlockchainIcon, FileIcon } from '@/components/icons';
 import { api, ApiError } from '@/lib/api';
-import type { ActividadReciente, Certificado, SubidaCertificado } from '@/lib/types';
+import { registrarCertificado } from '@/lib/wallet';
+import { useWallet } from '@/hooks/useWallet';
+import type { ActividadReciente, SubidaCertificado } from '@/lib/types';
 
 type Paso = 'idle' | 'subiendo' | 'subido' | 'registrando' | 'registrado';
 
@@ -20,11 +23,13 @@ export default function CertificadosPage() {
   const [nombreEstudiante, setNombreEstudiante] = useState('');
   const [carrera, setCarrera] = useState('');
   const [fechaEmision, setFechaEmision] = useState('');
-  const [certificado, setCertificado] = useState<Certificado | null>(null);
+  const [hash, setHash] = useState('');
+  const [txHash, setTxHash] = useState('');
   const [error, setError] = useState('');
   const [recientes, setRecientes] = useState<ActividadReciente[]>([]);
   const [cargandoRecientes, setCargandoRecientes] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { cuenta } = useWallet();
 
   useEffect(() => {
     api
@@ -40,8 +45,18 @@ export default function CertificadosPage() {
     setArchivoNombre(file.name);
     setPaso('subiendo');
     try {
-      const resultado = await api.subirCertificado(file);
+      // TODO (temporal): mock — saltamos el backend hasta que exista /certificados/procesar.
+      const resultado: SubidaCertificado = {
+        subidaId: 'mock',
+        hash: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        nombreEstudiante: '',
+        carrera: '',
+        fechaEmision: '',
+        archivoNombre: file.name,
+      };
+      // const resultado = await api.procesarCertificado(file); // ← real (descomentar cuando el backend esté)
       setSubida(resultado);
+      setHash(resultado.hash);
       setNombreEstudiante(resultado.nombreEstudiante);
       setCarrera(resultado.carrera);
       setFechaEmision(resultado.fechaEmision);
@@ -52,21 +67,23 @@ export default function CertificadosPage() {
     }
   }
 
-  async function handleRegister() {
+async function handleRegister() {
     if (!subida) return;
+    if (!cuenta) {
+      setError('Conectá tu wallet (MetaMask) para firmar el registro.');
+      return;
+    }
     setPaso('registrando');
     setError('');
     try {
-      const resultado = await api.registrarCertificado({
-        subidaId: subida.subidaId,
-        nombreEstudiante,
-        carrera,
-        fechaEmision,
-      });
-      setCertificado(resultado);
+      // 1) Firmar on-chain con MetaMask.
+      const tx = await registrarCertificado(hash);
+      setTxHash(tx);
+      // TODO (temporal): saltamos confirmar hasta que el backend tenga /certificados/confirmar.
+      // await api.confirmarCertificado({ subidaId: subida.subidaId, hash, txHash: tx, nombreEstudiante, carrera, fechaEmision, archivoNombre: subida.archivoNombre });
       setPaso('registrado');
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No se pudo registrar el certificado en blockchain.');
+      setError(err instanceof Error ? err.message : 'No se pudo registrar el certificado.');
       setPaso('subido');
     }
   }
@@ -78,7 +95,8 @@ export default function CertificadosPage() {
     setNombreEstudiante('');
     setCarrera('');
     setFechaEmision('');
-    setCertificado(null);
+    setHash('');
+    setTxHash('');
     setError('');
   }
 
@@ -219,26 +237,30 @@ export default function CertificadosPage() {
                 />
               </div>
 
-              {isRegistered && certificado && (
-                <>
-                  <div>
+                <div>
                     <label className="block text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1.5">
                       Hash blockchain
                     </label>
-                    <div className="bg-gray-50 border border-gray-200 rounded-sm px-3 py-2.5">
-                      <p className="font-mono text-xs text-gray-600 break-all">{certificado.hash}</p>
-                    </div>
+                    <input
+                      type="text"
+                      value={hash}
+                      onChange={(e) => setHash(e.target.value)}
+                      disabled={isRegistered}
+                      placeholder="0x + 64 caracteres hex"
+                      className="w-full px-3 py-2.5 text-sm rounded-sm border border-gray-200 outline-none font-mono disabled:bg-gray-50 disabled:text-gray-600"
+                    />
+                </div>
+                {isRegistered && txHash && (
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1.5">
+                    Transacción
+                  </label>
+                  <div className="bg-gray-50 border border-gray-200 rounded-sm px-3 py-2.5">
+                    <p className="font-mono text-xs text-gray-600 break-all">{txHash}</p>
                   </div>
-                  <div>
-                    <label className="block text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1.5">
-                      Código de verificación
-                    </label>
-                    <div className="bg-gray-50 border border-gray-200 rounded-sm px-3 py-2.5 flex items-center justify-between">
-                      <p className="font-mono text-sm font-medium text-navy">{certificado.codigo}</p>
-                    </div>
-                  </div>
-                </>
-              )}
+                </div>
+              )} 
+
             </div>
           )}
 

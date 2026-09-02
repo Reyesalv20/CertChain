@@ -48,19 +48,22 @@ export interface MensajeChat {
 // lo guarda/parsea y devuelve los datos que se prellenan en el formulario.
 export interface SubidaCertificado {
   subidaId: string;
+  hash: string;
   nombreEstudiante: string;
   carrera: string;
   fechaEmision: string;
   archivoNombre: string;
 }
 
-export interface DatosRegistroCertificado {
+export interface DatosConfirmacionCertificado {
   subidaId: string;
+  hash: string;
+  txHash: string;
   nombreEstudiante: string;
   carrera: string;
   fechaEmision: string;
+  archivoNombre: string;
 }
-
 export interface CredencialesLogin {
   email: string;
   password: string;
