@@ -19,6 +19,7 @@ import type {
   ResultadoVerificacion,
   SubidaCertificado,
 } from './types';
+import { createClient } from './supabase/client';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:4000';
 
@@ -33,16 +34,16 @@ export class ApiError extends Error {
 
 async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const isFormData = options.body instanceof FormData;
+  const supabase = createClient();
+  const { data: { session } } = await supabase.auth.getSession();
 
   let response: Response;
   try {
     response = await fetch(`${BACKEND_URL}${path}`, {
-      // El backend setea la cookie httpOnly "certchain_token" en /auth/login.
-      // credentials: 'include' es necesario para que el navegador la envíe de vuelta.
-      credentials: 'include',
       ...options,
       headers: {
         ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
         ...options.headers,
       },
     });
