@@ -108,9 +108,6 @@ export const api = {
     });
   },
 
-confirmarCertificado(datos: DatosConfirmacionCertificado): Promise<Certificado> {
-  return apiFetch('/certificados/confirmar', { method: 'POST', body: JSON.stringify(datos) });
-},
   // GET /certificados/recientes (protegido) — para el sidebar de actividad y el dashboard
   obtenerRecientes(): Promise<ActividadReciente[]> {
     return apiFetch('/certificados/recientes');
@@ -126,17 +123,29 @@ confirmarCertificado(datos: DatosConfirmacionCertificado): Promise<Certificado> 
     return apiFetch(`/certificados/verificar?codigo=${encodeURIComponent(codigo)}`);
   },
 
-  // Metadata del certificado por hash (público).
-  // TODO: el backend aún no expone este endpoint (consulta Supabase por hash).
-  // Mientras tanto devolvemos metadata dummy para que la UI funcione.
-  obtenerMetadataPorHash(_certHash: string): Promise<MetadataCertificado> {
-    return Promise.resolve({
-      nombreEstudiante: 'María García López',
-      carrera: 'Ingeniería en Sistemas Computacionales',
-      institucion: 'Universidad Autónoma de Xalapa',
-      fechaEmision: '2024-06-15',
-      codigo: 'UAX-2024-0847-MENG',
-    });
+  // GET /certificados/obtenerMetadataPorHash?hash=... (público)
+  // Devuelve la metadata del certificado desde Supabase (vía backend).
+  async obtenerMetadataPorHash(hash: string): Promise<MetadataCertificado | null> {
+    const data = await apiFetch<{
+      valido: boolean;
+      certificado?: {
+        codigo: string;
+        nombreEstudiante: string;
+        carrera: string;
+        fechaEmision: string;
+        institucion: string | null;
+      };
+    }>(`/certificados/obtenerMetadataPorHash?hash=${encodeURIComponent(hash)}`);
+
+    if (!data.valido || !data.certificado) return null;
+
+    return {
+      nombreEstudiante: data.certificado.nombreEstudiante,
+      carrera: data.certificado.carrera,
+      institucion: data.certificado.institucion ?? '—',
+      fechaEmision: data.certificado.fechaEmision,
+      codigo: data.certificado.codigo,
+    };
   },
 
   // POST /chat (público)

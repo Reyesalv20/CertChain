@@ -1,16 +1,19 @@
 'use client';
 
-// Ruta protegida: "/certificados"
-// Flujo en dos pasos:
-//   1. POST /certificados/procesar -> OCR + hash del PDF, sin guardar nada
-//   2. POST /certificados/confirmar -> guarda metadata + hash en Supabase
+// Ruta protegida: "/certificados" (requiere cookie certchain_token, ver middleware.ts)
+// Flujo en tres pasos:
+//  1. POST /certificados/procesar -> backend devuelve OCR + hash (mock)
+//  2. firma registerCertificate(hash) con MetaMask -> se registra on-chain
+//  3. POST /certificados/confirmar -> backend persiste metadata + hash en la DB
 
 import { useEffect, useRef, useState } from 'react';
 import { BlockchainIcon, FileIcon } from '@/components/icons';
 import { api, ApiError } from '@/lib/api';
-import type { ActividadReciente, Certificado, SubidaCertificado } from '@/lib/types';
+import { registrarCertificado } from '@/lib/wallet';
+import { useWallet } from '@/hooks/useWallet';
+import type { ActividadReciente, SubidaCertificado } from '@/lib/types';
 
-type Paso = 'idle' | 'procesando' | 'procesado' | 'registrando' | 'registrado';
+type Paso = 'idle' | 'subiendo' | 'subido' | 'registrando' | 'registrado';
 
 export default function CertificadosPage() {
   const [paso, setPaso] = useState<Paso>('idle');
@@ -20,11 +23,13 @@ export default function CertificadosPage() {
   const [nombreEstudiante, setNombreEstudiante] = useState('');
   const [carrera, setCarrera] = useState('');
   const [fechaEmision, setFechaEmision] = useState('');
-  const [certificado, setCertificado] = useState<Certificado | null>(null);
+  const [hash, setHash] = useState('');
+  const [txHash, setTxHash] = useState('');
   const [error, setError] = useState('');
   const [recientes, setRecientes] = useState<ActividadReciente[]>([]);
   const [cargandoRecientes, setCargandoRecientes] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { cuenta } = useWallet();
 
   useEffect(() => {
     api
@@ -38,38 +43,47 @@ export default function CertificadosPage() {
     if (!file) return;
     setError('');
     setArchivoNombre(file.name);
-    setPaso('procesando');
+    setPaso('subiendo');
     try {
       const resultado = await api.procesarCertificado(file);
-      setSubida(resultado); // incluye { subidaId, hash, nombreEstudiante, carrera, fechaEmision, archivoNombre }
+      setSubida(resultado);
+      setHash(resultado.hash);
       setNombreEstudiante(resultado.nombreEstudiante);
       setCarrera(resultado.carrera);
       setFechaEmision(resultado.fechaEmision);
-      setPaso('procesado');
+      setPaso('subido');
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No se pudo procesar el archivo.');
+      setError(err instanceof ApiError ? err.message : 'No se pudo subir el archivo.');
       setPaso('idle');
     }
   }
 
-  async function handleRegister() {
+async function handleRegister() {
     if (!subida) return;
+    if (!cuenta) {
+      setError('Conectá tu wallet (MetaMask) para firmar el registro.');
+      return;
+    }
     setPaso('registrando');
     setError('');
     try {
-      const resultado = await api.confirmarCertificado({
+      // 1) Firmar on-chain con MetaMask.
+      const tx = await registrarCertificado(hash);
+      setTxHash(tx);
+      // 2) Persistir metadata + hash en Supabase (backend /certificados/confirmar).
+      await api.confirmarCertificado({
         subidaId: subida.subidaId,
-        hash: subida.hash,
+        hash,
+        txHash: tx,
         nombreEstudiante,
         carrera,
         fechaEmision,
         archivoNombre: subida.archivoNombre,
       });
-      setCertificado(resultado);
       setPaso('registrado');
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No se pudo registrar el certificado.');
-      setPaso('procesado');
+      setError(err instanceof Error ? err.message : 'No se pudo registrar el certificado.');
+      setPaso('subido');
     }
   }
 
@@ -80,14 +94,13 @@ export default function CertificadosPage() {
     setNombreEstudiante('');
     setCarrera('');
     setFechaEmision('');
-    setCertificado(null);
+    setHash('');
+    setTxHash('');
     setError('');
   }
 
   const isRegistered = paso === 'registrado';
-  const isBusy = paso === 'procesando' || paso === 'registrando';
-  // El hash existe desde que se procesa el PDF; si ya está registrado, usa el que confirmó el backend.
-  const hashMostrado = certificado?.hash ?? subida?.hash ?? '';
+  const isBusy = paso === 'subiendo' || paso === 'registrando';
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-10">
@@ -155,10 +168,10 @@ export default function CertificadosPage() {
                   <div>
                     <p className="text-sm font-medium text-gray-800">{archivoNombre}</p>
                     <p className="text-xs text-gray-400 font-mono mt-0.5">
-                      {paso === 'procesando' ? 'Leyendo PDF y generando hash...' : 'PDF cargado'}
+                      {paso === 'subiendo' ? 'Subiendo...' : 'PDF cargado'}
                     </p>
                   </div>
-                  {paso !== 'procesando' && (
+                  {paso !== 'subiendo' && (
                     <div className="ml-auto">
                       <span className="text-xs font-semibold text-green-700 bg-green-50 px-2 py-1 rounded-full border border-green-200">
                         Cargado
@@ -172,12 +185,12 @@ export default function CertificadosPage() {
 
           {isRegistered && (
             <div className="rounded-sm border border-green-200 bg-green-50 p-5 mb-6">
-              <p className="font-semibold text-green-800 text-sm">Certificado registrado</p>
-              <p className="text-green-700 text-xs mt-1">Los datos y el hash quedaron guardados de forma permanente.</p>
+              <p className="font-semibold text-green-800 text-sm">Certificado registrado en blockchain</p>
+              <p className="text-green-700 text-xs mt-1">La transacción ha sido confirmada y es permanente.</p>
             </div>
           )}
 
-          {paso !== 'idle' && paso !== 'procesando' && (
+          {paso !== 'idle' && paso !== 'subiendo' && (
             <div className="bg-white border border-gray-200 rounded-sm p-6 flex flex-col gap-5">
               <h2 className="text-xs font-semibold uppercase tracking-widest text-gray-400 border-b border-gray-100 pb-3">
                 Datos del certificado
@@ -223,45 +236,47 @@ export default function CertificadosPage() {
                 />
               </div>
 
-              {/* Hash blockchain: visible desde que se procesa el PDF, no solo al final */}
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1.5">
-                  Hash blockchain
-                </label>
-                <div className="bg-gray-50 border border-gray-200 rounded-sm px-3 py-2.5">
-                  <p className="font-mono text-xs text-gray-600 break-all">
-                    {hashMostrado || '—'}
-                  </p>
+                <div>
+                    <label className="block text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1.5">
+                      Hash blockchain
+                    </label>
+                    <input
+                      type="text"
+                      value={hash}
+                      onChange={(e) => setHash(e.target.value)}
+                      disabled={isRegistered}
+                      placeholder="0x + 64 caracteres hex"
+                      className="w-full px-3 py-2.5 text-sm rounded-sm border border-gray-200 outline-none font-mono disabled:bg-gray-50 disabled:text-gray-600"
+                    />
                 </div>
-              </div>
-
-              {isRegistered && certificado && (
+                {isRegistered && txHash && (
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1.5">
-                    Código de verificación
+                    Transacción
                   </label>
-                  <div className="bg-gray-50 border border-gray-200 rounded-sm px-3 py-2.5 flex items-center justify-between">
-                    <p className="font-mono text-sm font-medium text-navy">{certificado.codigo}</p>
+                  <div className="bg-gray-50 border border-gray-200 rounded-sm px-3 py-2.5">
+                    <p className="font-mono text-xs text-gray-600 break-all">{txHash}</p>
                   </div>
                 </div>
-              )}
+              )} 
+
             </div>
           )}
 
-          {paso === 'procesado' && (
+          {paso === 'subido' && (
             <button
               onClick={handleRegister}
               className="mt-5 flex items-center gap-2.5 px-6 py-3 text-sm font-semibold text-white rounded-sm bg-navy border-none"
             >
               <BlockchainIcon size={16} />
-              Registrar certificado
+              Registrar en blockchain
             </button>
           )}
 
           {paso === 'registrando' && (
             <div className="mt-5 flex items-center gap-3 px-5 py-3.5 bg-white border border-gray-200 rounded-sm">
               <div className="w-4 h-4 rounded-full border-2 border-steel border-t-transparent animate-spin" />
-              <span className="text-sm text-gray-600 font-mono">Guardando certificado...</span>
+              <span className="text-sm text-gray-600 font-mono">Registrando en blockchain...</span>
             </div>
           )}
         </div>
