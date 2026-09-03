@@ -79,3 +79,24 @@ export interface CredencialesLogin {
   email: string;
   password: string;
 }
+
+//Agregando 2 nuevas interfaces para el hasheo y emision de certificado
+
+export interface SubidaCertificado {
+  subidaId: string;
+  hash: string;
+  nombreEstudiante: string;
+  carrera: string;
+  fechaEmision: string;
+  archivoNombre: string;
+}
+
+export interface DatosConfirmacionCertificado {
+  subidaId: string;
+  hash: string;
+  txHash: string;
+  nombreEstudiante: string;
+  carrera: string;
+  fechaEmision: string;
+  archivoNombre: string;
+}

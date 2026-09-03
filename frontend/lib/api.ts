@@ -86,17 +86,16 @@ export const api = {
     return apiFetch('/auth/logout', { method: 'POST' });
   },
 
+
   // POST /certificados/subir (protegido)
   // multipart/form-data con el campo "archivo" (PDF).
   // El backend guarda el archivo y devuelve los datos que se prellenan en el formulario
   // (puede ser extracción automática o, si no es viable, valores vacíos para llenado manual).
+  // exactamente igual que como estab en la rama kelvin/frontend-metamask
   procesarCertificado(archivo: File): Promise<SubidaCertificado> {
     const formData = new FormData();
     formData.append('archivo', archivo);
-    return apiFetch('/certificados/procesar', {
-      method: 'POST',
-      body: formData,
-    });
+    return apiFetch('/certificados/procesar', { method: 'POST', body: formData,});
   },
 
   // POST /certificados (protegido)
@@ -109,6 +108,9 @@ export const api = {
     });
   },
 
+confirmarCertificado(datos: DatosConfirmacionCertificado): Promise<Certificado> {
+  return apiFetch('/certificados/confirmar', { method: 'POST', body: JSON.stringify(datos) });
+},
   // GET /certificados/recientes (protegido) — para el sidebar de actividad y el dashboard
   obtenerRecientes(): Promise<ActividadReciente[]> {
     return apiFetch('/certificados/recientes');
