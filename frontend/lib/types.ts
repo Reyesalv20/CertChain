@@ -64,6 +64,17 @@ export interface DatosConfirmacionCertificado {
   fechaEmision: string;
   archivoNombre: string;
 }
+
+// Metadata del certificado guardada en Supabase (vía backend).
+// Mientras el backend no la exponga por hash, se mockea en lib/api.ts.
+export interface MetadataCertificado {
+  nombreEstudiante: string;
+  carrera: string;
+  institucion: string;
+  fechaEmision: string;
+  codigo: string;
+}
+
 export interface CredencialesLogin {
   email: string;
   password: string;

@@ -19,7 +19,7 @@ export function WalletButton() {
         <button
           onClick={conectarWallet}
           disabled={conectando}
-          className="text-white/80 hover:text-white text-sm transition-colors bg-white/10 border border-white/20 rounded-full px-4 py-1.5 cursor-pointer disabled:opacity-50"
+          className="text-red-200 hover:text-red-100 text-sm font-medium transition-colors bg-red-500/20 border border-red-400/50 rounded-full px-4 py-1.5 cursor-pointer disabled:opacity-50 hover:bg-red-500/30"
         >
           {conectando ? 'Conectando…' : 'Conectar wallet'}
         </button>

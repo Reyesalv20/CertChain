@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useState, createContext, useContext, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, createContext, useContext, type ReactNode } from 'react';
 import { conectar } from '@/lib/wallet';
 
 interface WalletContextValue {
@@ -29,8 +29,27 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // TODO (futuro): suscribir a window.ethereum.on('accountsChanged') para
-  // actualizar `cuenta` si el usuario cambia de cuenta en MetaMask.
+  // Escucha cambios de cuenta y de red en MetaMask.
+  useEffect(() => {
+        const ethereum = window.ethereum;
+        if (!ethereum?.on) return;
+
+        const manejarCambioDeCuenta = (accounts: unknown[]) => {
+          setCuenta(accounts.length > 0 ? String(accounts[0]) : null);
+        };
+
+        const manejarCambioDeRed = () => {
+          window.location.reload();
+        };
+
+        ethereum.on('accountsChanged', manejarCambioDeCuenta);
+        ethereum.on('chainChanged', manejarCambioDeRed);
+
+        return () => {
+          ethereum.removeListener('accountsChanged', manejarCambioDeCuenta);
+          ethereum.removeListener('chainChanged', manejarCambioDeRed);
+        };
+      }, []); 
 
   return (
     <WalletContext.Provider value={{ cuenta, conectando, error, conectarWallet }}>

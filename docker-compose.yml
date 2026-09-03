@@ -12,10 +12,12 @@ services:
       - NEXT_PUBLIC_BACKEND_URL=http://localhost:4000
       # Esta URL es para llamadas server-side (SSR / route handlers) dentro de la red de Docker
       - BACKEND_INTERNAL_URL=http://backend:4000
-      # RPC de la blockchain local: la usa el BROWSER (MetaMask) para firmar tx
-      - NEXT_PUBLIC_RPC_URL=http://localhost:8545
-      # El navegador fetchea /config del blockchain-service (address + ABI) para firmar
+      # El navegador fetchea /config y /verifyCertificate del blockchain-service
+      # (a través del rewrite de next.config.js)
       - NEXT_PUBLIC_BLOCKCHAIN_SERVICE_URL=http://localhost:6000
+      # Supabase: se leen del .env de la raíz (ver .env.example), NO se hardcodean.
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY}
       # Sin esto, la primera vez que corre "next dev" muestra el prompt de
       # telemetría y, al no haber una terminal interactiva en el contenedor,
       # el proceso se queda esperando input y termina solo (exit code 0).
@@ -41,6 +43,9 @@ services:
       # El servicio de blockchain real se llama "server" (definido en
       # blockchain-service/docker-compose.yml), ya no "blockchain-service"
       - BLOCKCHAIN_SERVICE_URL=http://server:6000
+      # Supabase (server-side): se leen del .env de la raíz.
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
     volumes:
       - ./backend:/app
       - /app/node_modules

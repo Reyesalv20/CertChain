@@ -16,6 +16,7 @@ import type {
   DatosConfirmacionCertificado,
   EstadisticasDashboard,
   Institucion,
+  MetadataCertificado,
   ResultadoVerificacion,
   SubidaCertificado,
 } from './types';
@@ -121,6 +122,19 @@ export const api = {
   // GET /certificados/verificar?codigo=... (público)
   verificarCertificado(codigo: string): Promise<ResultadoVerificacion> {
     return apiFetch(`/certificados/verificar?codigo=${encodeURIComponent(codigo)}`);
+  },
+
+  // Metadata del certificado por hash (público).
+  // TODO: el backend aún no expone este endpoint (consulta Supabase por hash).
+  // Mientras tanto devolvemos metadata dummy para que la UI funcione.
+  obtenerMetadataPorHash(_certHash: string): Promise<MetadataCertificado> {
+    return Promise.resolve({
+      nombreEstudiante: 'María García López',
+      carrera: 'Ingeniería en Sistemas Computacionales',
+      institucion: 'Universidad Autónoma de Xalapa',
+      fechaEmision: '2024-06-15',
+      codigo: 'UAX-2024-0847-MENG',
+    });
   },
 
   // POST /chat (público)
