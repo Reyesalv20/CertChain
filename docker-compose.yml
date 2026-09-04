@@ -1,149 +1,22 @@
+# ─────────────────────────────────────────────────────────────
+# CertChain — orquestador Docker Compose (raíz)
+#
+# Cada servicio tiene su propio docker-compose.yml (módulo) y este archivo
+# los incluye a todos en un mismo proyecto/red, así podés levantar lo que
+# necesites "independientemente" desde la raíz:
+#
+#   docker compose up -d frontend            # frontend (más backend/blockchain si los levantás antes)
+#   docker compose up -d backend             # backend
+#   docker compose up -d blockchain-server   # solo el blockchain-service (anvil+deploy+blockchain-server)
+#   docker compose up -d llm-service         # llm + ollama
+#
+# Las variables se leen del .env de la raíz (ver .env.example).
+# Cada módulo declara la red certchain-network con nombre fijo, así también
+# podés levantar cada servicio standalone desde su propia carpeta
+# (cd frontend && docker compose up -d, cd blockchain-service && docker compose up -d, ...).
+# ─────────────────────────────────────────────────────────────
 include:
+  - ./frontend/docker-compose.yml
+  - ./backend/docker-compose.yml
   - ./blockchain-service/docker-compose.yml
-services:
-  # --- Portal (Next.js): institucional + público ---
-  frontend:
-    build: ./frontend
-    container_name: certchain-frontend
-    ports:
-      - "3000:3000"
-    environment:
-      # Esta URL la usa el BROWSER del usuario -> debe ser localhost, NO el nombre del servicio
-      - NEXT_PUBLIC_BACKEND_URL=http://localhost:4000
-      # Esta URL es para llamadas server-side (SSR / route handlers) dentro de la red de Docker
-      - BACKEND_INTERNAL_URL=http://backend:4000
-      # RPC de la blockchain local: la usa el BROWSER (MetaMask) para firmar tx
-      - NEXT_PUBLIC_RPC_URL=http://localhost:8545
-      # Sin esto, la primera vez que corre "next dev" muestra el prompt de
-      # telemetría y, al no haber una terminal interactiva en el contenedor,
-      # el proceso se queda esperando input y termina solo (exit code 0).
-      - NEXT_TELEMETRY_DISABLED=1
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-      - /app/.next
-    depends_on:
-      - backend
-    networks:
-      - certchain-network
-
-  # --- API principal (NestJS) ---
-  backend:
-    build: ./backend
-    container_name: certchain-backend
-    ports:
-      - "4000:4000"
-    environment:
-      - PORT=4000
-      - LLM_SERVICE_URL=http://llm-service:5000
-      # El servicio de blockchain real se llama "server" (definido en
-      # blockchain-service/docker-compose.yml), ya no "blockchain-service"
-      - BLOCKCHAIN_SERVICE_URL=http://server:6000
-    volumes:
-      - ./backend:/app
-      - /app/node_modules
-    depends_on:
-      - server
-      - llm-service
-    networks:
-      - certchain-network
-
-  # --- Blockchain local (anvil, efímera) ---
-  anvil:
-    image: ghcr.io/foundry-rs/foundry:stable
-    container_name: certchain-anvil
-    # La imagen de Foundry trae ENTRYPOINT ["/bin/sh","-c"], que "se come"
-    # los args; por eso entrypoint explícito. 0.0.0.0 para que la red Docker
-    # la alcance (por defecto anvil solo acepta localhost).
-    entrypoint: ["anvil", "--host", "0.0.0.0", "--port", "8545"]
-    ports:
-      - "8545:8545"   # host → el navegador (MetaMask) firma contra acá
-    networks:
-      - certchain-network
-
-  # --- Despliegue de contratos (se ejecuta UNA vez y termina) ---
-  deploy:
-    image: ghcr.io/foundry-rs/foundry:stable
-    container_name: certchain-deploy
-    entrypoint: ["sh"]
-    command: ["/app/deploy.sh"]
-    user: root
-    working_dir: /app
-    environment:
-      - ISSUER_PRIVATE_KEY=0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d
-    volumes:
-      - ./blockchain-service/contracts/src:/app/src
-      - ./blockchain-service/contracts/foundry.toml:/app/foundry.toml
-      - ./blockchain-service/deploy.sh:/app/deploy.sh
-      - shared:/shared              # escribe las direcciones de los contratos
-    depends_on:
-      - anvil
-    networks:
-      - certchain-network
-
-  # --- Servicio de blockchain (emisión/verificación de certificados) ---
-  blockchain-service:
-    build: ./blockchain-service
-    container_name: certchain-blockchain
-    ports:
-      - "6000:6000"
-    environment:
-      - PORT=6000
-      - RPC_URL=http://anvil:8545
-      - PRIVATE_KEY=0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d
-      - ADMIN_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
-      - ENABLE_DEV_ADMIN=true
-    volumes:
-      - ./blockchain-service:/app
-      - /app/node_modules
-      - /app/out              # conserva el ABI compilado en la imagen
-      - shared:/shared        # lee las direcciones escritas por deploy
-    depends_on:
-      - anvil
-      - deploy
-    networks:
-      - certchain-network
-
-  # --- Servicio LLM/RAG (placeholder hasta que se implemente) ---
-  llm-service:
-    build: ./llm-service
-    container_name: certchain-llm
-    ports:
-      - "5000:5000"
-    environment:
-      - PORT=5000
-      # Por defecto apunta al contenedor local de abajo. Para usar Ollama
-      # corriendo en otra máquina (ej. túnel de Cloudflare/ngrok), poné
-      # OLLAMA_URL en tu .env de la raíz (ver .env.example) y este valor por
-      # defecto queda sin usarse.
-      - OLLAMA_URL=${OLLAMA_URL:-http://ollama:11434}
-      - OLLAMA_MODEL_LLAMA3=${OLLAMA_MODEL_LLAMA3:-llama3}
-      - OLLAMA_MODEL_MISTRAL=${OLLAMA_MODEL_MISTRAL:-mistral}
-      # TODO (backend): endpoint todavía no existe, ver llm-service/RFID_CONTRACT.md
-      - CERTIFICADOS_SERVICE_URL=http://backend:4000
-      - MOCK_CERTIFICADOS=${MOCK_CERTIFICADOS:-true}
-    volumes:
-      - ./llm-service:/app
-    depends_on:
-      - ollama
-    networks:
-      - certchain-network
-
-  # --- Motor de modelos LLM ---
-  ollama:
-    image: ollama/ollama
-    container_name: certchain-ollama
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama-data:/root/.ollama
-    networks:
-      - certchain-network
-
-networks:
-  certchain-network:
-    driver: bridge
-
-volumes:
-  ollama-data:
-  shared:   # direcciones de contratos compartidas entre deploy y blockchain-service
+  - ./llm-service/docker-compose.yml

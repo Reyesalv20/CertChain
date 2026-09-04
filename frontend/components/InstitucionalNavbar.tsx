@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { api } from '@/lib/api';
 import { ShieldIcon } from './icons';
+import { WalletButton } from './WalletButton';
 
 // Navbar del portal institucional (grupo (institucional)): "/dashboard", "/certificados".
 export function InstitucionalNavbar() {
@@ -50,13 +51,16 @@ export function InstitucionalNavbar() {
             </Link>
           </div>
         </div>
-        <button
-          onClick={handleLogout}
-          disabled={cerrandoSesion}
-          className="text-white/60 hover:text-white text-sm transition-colors bg-transparent border-none cursor-pointer"
-        >
-          {cerrandoSesion ? 'Saliendo...' : 'Cerrar sesión'}
-        </button>
+        <div className="flex items-center gap-4">
+          <WalletButton />
+          <button
+            onClick={handleLogout}
+            disabled={cerrandoSesion}
+            className="text-white/60 hover:text-white text-sm transition-colors bg-transparent border-none cursor-pointer"
+          >
+            {cerrandoSesion ? 'Saliendo...' : 'Cerrar sesión'}
+          </button>
+        </div>
       </div>
     </nav>
   );

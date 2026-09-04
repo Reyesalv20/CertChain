@@ -1,57 +1,69 @@
+# ── Módulo: blockchain-service ─────────────────────────────
+# Define anvil (blockchain local) + deploy (despliega contratos)
+# + blockchain-server (API Express en 6000).
+#
+# Se puede levantar standalone desde esta carpeta:
+#   docker compose up -d
+# La red tiene nombre fijo (certchain-network), así si levantás otros
+# servicios (frontend/backend) desde sus carpetas, todos se conectan acá.
 services:
 
-  # ---- 1) La blockchain local ----
+  # 1) Blockchain local (efímera)
   anvil:
     image: ghcr.io/foundry-rs/foundry:stable
-    # IMPORTANTE: la imagen de Foundry trae ENTRYPOINT ["/bin/sh","-c"],
-    # que "se come" todos los args de un comando en lista (solo corre la
-    # primera palabra). La solución: entrypoint explícito, sin sh -c.
+    # La imagen de Foundry trae ENTRYPOINT ["/bin/sh","-c"], que "se come" los
+    # args; por eso entrypoint explícito. 0.0.0.0 para que la red Docker la alcance.
     entrypoint: ["anvil", "--host", "0.0.0.0", "--port", "8545"]
-    # 0.0.0.0 = escuchar dentro de la red Docker (por defecto anvil
-    # solo acepta localhost, y los otros contenedores no podrían conectarse)
     ports:
-      - "8545:8545"   # host:contenedor → seguís usando `cast` desde tu terminal
+      - "8545:8545"   # host → MetaMask/cast firman contra acá
+    networks:
+      - certchain-network
 
-  # ---- 2) El despliegue (se ejecuta UNA vez y termina) ----
+  # 2) Despliegue de contratos (corre una vez y termina)
   deploy:
     image: ghcr.io/foundry-rs/foundry:stable
-    entrypoint: ["sh"]          # mismo fix: sin sh -c intermedio
+    entrypoint: ["sh"]
     command: ["/app/deploy.sh"]
-    # La imagen corre como usuario "foundry" (uid 1000) y no puede
-    # escribir en /app/out ni en el volumen. Como deploy es un contenedor
-    # efímero de desarrollo, corremos como root sin drama.
     user: root
     working_dir: /app
     environment:
       ISSUER_PRIVATE_KEY: 0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d
     volumes:
-      - ./contracts/src:/app/src         # el contrato (montado en vivo)
+      - ./contracts/src:/app/src
       - ./contracts/foundry.toml:/app/foundry.toml
-      - ./deploy.sh:/app/deploy.sh  # el script de despliegue
-      - shared:/shared              # volumen compartido: escribe la dirección
+      - ./deploy.sh:/app/deploy.sh
+      - shared:/shared              # escribe la dirección de los contratos
     depends_on:
       - anvil
+    networks:
+      - certchain-network
 
-  # ---- 3) El server Express ----
-  server:
-    build: .                        # usa tu Dockerfile (imagen multi-stage)
+  # 3) API Express del blockchain-service
+  blockchain-server:
+    build: .
     image: blockchain-service:latest
     environment:
-      # Dentro de la red Docker, "anvil" es el nombre del host del
-      # contenedor anvil — así el server encuentra la blockchain
+      # Dentro de la red Docker, "anvil" es el nombre del host del contenedor anvil.
       RPC_URL: http://anvil:8545
-      PRIVATE_KEY: 0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d 
+      PRIVATE_KEY: 0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d
       ADMIN_PRIVATE_KEY: 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
       ENABLE_DEV_ADMIN: "true"
       PORT: 6000
     volumes:
-      - shared:/shared              # lee CONTRACT_ADDRESS de acá
+      - shared:/shared              # lee la dirección de los contratos
     depends_on:
       - anvil
       - deploy
     ports:
-      - "6000:6000"   # el server escucha 3000 adentro, 4000 afuera
-                      # (3000 en tu host está ocupado por la app de OpenWork)
+      - "6000:6000"
+    networks:
+      - certchain-network
+
+networks:
+  # Nombre fijo: hace que proyectos separados compartan la misma red.
+  certchain-network:
+    name: certchain-network
+    driver: bridge
 
 volumes:
-  shared:   # el volumen compartido entre deploy y server
+  shared:   # volumen compartido entre deploy y blockchain-server
