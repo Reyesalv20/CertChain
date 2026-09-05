@@ -1,6 +1,6 @@
 # CertChain
 
-Plataforma de certificación académica anti-falsificación con blockchain, RFID/Arduino y asistente LLM con RAG.
+Plataforma de **certificación académica anti-falsificación** basada en blockchain, con emisión/verificación de certificados, integración con RFID/Arduino y un asistente con IA (RAG).
 
 Proyecto de la clase **Aplicaciones de Vanguardia** — equipo de 4 personas.
 
@@ -25,96 +25,157 @@ Microservicios independientes en contenedores Docker. Si un servicio se cae, no 
 
 Los contenedores se comunican entre sí **por nombre de servicio** (ej. `http://backend:4000`), no por `localhost`. `localhost` dentro de un contenedor solo apunta a sí mismo.
 
-## Tabla de puertos y responsables
+## Servicios
 
-| Servicio             | Puerto  | Tecnología          | Responsable                  |
-|-----------------------|---------|----------------------|-------------------------------|
-| `frontend`            | 3000    | Next.js (App Router) | Persona 3 (infraestructura) — implementación UI: _completar_ |
-| `backend`              | 4000    | NestJS               | _completar_ |
-| `blockchain-service`   | 6000    | Node.js / Express    | _completar_ |
-| `llm-service`          | 5000    | Python / FastAPI     | _completar_ (RAG + LLM) |
-| `ollama`               | 11434   | Ollama (imagen oficial) | Compartido / infraestructura |
-
-> Ajusten esta tabla con los nombres reales del equipo.
+| Servicio | Puertos | Tecnología | Descripción |
+|---|---|---|---|
+| `frontend` | `3000` | Next.js (App Router) | Portal institucional (emisión de certificados) y verificación pública |
+| `backend` | `4000` | NestJS | API principal: auth, procesar PDF (OCR), confirmar y metadata de certificados |
+| `blockchain-service` | `6000` (API) · `8545` (anvil) | Express + Foundry | API sobre los smart contracts (`/config`, `/verifyCertificate`) y blockchain local efímera (`anvil`) |
+| `llm-service` | `5000` | Python / FastAPI | Asistente con RAG sobre los certificados |
+| `ollama` | `11434` | Ollama | Motor de modelos local (usa `llm-service`) |
 
 ## Requisitos
 
-- Docker y Docker Compose (`docker compose version` para confirmar).
-- No hace falta instalar Node/Python en tu máquina: todo corre dentro de los contenedores.
+- **Docker** y **Docker Compose v2** (`docker compose version`).
+- **Git** para clonar el repositorio.
+- **Node.js 22+** — solo si vas a correr algún servicio en desarrollo local sin Docker (`npm run dev`). El backend **requiere Node 22+** porque `@supabase/supabase-js` necesita el WebSocket nativo (en Docker esto ya se resuelve con la imagen correcta).
+- **Supabase** — el proyecto usa Supabase para auth y como base de datos. Necesitás las credenciales (URL y keys). Las del proyecto del equipo ya vienen en `.env.example`; completá la que falta (service role key, que es secreta y no se commitea).
 
-## Levantar el proyecto completo
+> Para desarrollo **sin Docker**, cada carpeta de servicio tiene su propio `README.md` con las instrucciones específicas y su `.env.example`.
+
+## Levantar el proyecto
 
 ```bash
 git clone https://github.com/Reyesalv20/CertChain.git
 cd CertChain
-cp .env.example .env   # opcional, los valores por defecto ya funcionan
-docker compose up --build
+
+# 1. Variables de entorno (completá la SUPABASE_SERVICE_ROLE_KEY, es secreta)
+cp .env.example .env
+
+# 2. Levantar todo
+docker compose up -d --build
 ```
 
-Esto levanta los 5 servicios. Accesos:
+Esto levanta todos los servicios. Accesos:
 
-- Frontend: http://localhost:3000
-- Backend (health check): http://localhost:4000/health
-- Blockchain service (health check): http://localhost:6000/health
-- LLM service (health check): http://localhost:5000/health
-- Ollama: http://localhost:11434
+| Servicio | URL |
+|---|---|
+| Frontend | http://localhost:3000 |
+| Backend (health) | http://localhost:4000/health |
+| Blockchain API | http://localhost:6000/config |
+| Blockchain RPC (anvil) | http://localhost:8545 |
+| LLM service (health) | http://localhost:5000/health |
+| Ollama | http://localhost:11434 |
 
-Para apagar todo: `docker compose down` (agrega `-v` si además quieres borrar el volumen de modelos de Ollama).
+Para apagar todo: `docker compose down` (agregá `-v` si además querés borrar el volumen de modelos de Ollama y el volumen de la cadena).
 
-## Levantar SOLO tu servicio
+> ⚠️ **anvil es efímero** (la cadena vive en memoria). Si se cae o lo reiniciás sin que `deploy` vuelva a correr, las direcciones de los contratos quedan viejas. Regla de oro: `docker compose down -v` y volvé a levantar.
 
-Gracias a `depends_on` en `docker-compose.yml`, cada servicio arranca junto con lo mínimo que necesita para funcionar, sin encender el resto:
+## Levantar solo un servicio
+
+Cada servicio tiene su propio `docker-compose.yml` (un módulo), y el de la raíz los **incluye** a todos (`include:`). Por eso podés levantar lo que necesites de dos formas.
+
+### Desde la raíz (todo en un solo proyecto)
 
 ```bash
-# Compañero de backend (arranca backend + blockchain-service + llm-service + ollama, NO frontend)
-docker compose up backend
-
-# Compañero de blockchain (arranca anvil + deploy + blockchain-service)
-docker compose up blockchain-service
-
-# Compañero de LLM/RAG (arranca llm-service + ollama)
-docker compose up llm-service
-
-# Persona 3 / quien trabaje frontend (arranca todo, porque frontend depende de backend)
-docker compose up frontend
+docker compose up -d frontend
+docker compose up -d backend
+docker compose up -d blockchain-server   # levanta anvil + deploy + blockchain-server
+docker compose up -d llm-service
 ```
 
-También puedes ser explícito y nombrar varios servicios a mano:
+### Desde la carpeta de cada servicio (standalone)
+
+Todos comparten la red `certchain-network` (nombre fijo), así que se comunican aunque los levantes por separado:
 
 ```bash
-docker compose up backend blockchain-service llm-service
+cd blockchain-service && docker compose up -d   # anvil + deploy + blockchain-server
+cd frontend && docker compose up -d
+cd backend && docker compose up -d
+cd llm-service && docker compose up -d
 ```
 
-> Nota: `depends_on` controla el **orden de arranque**, no espera a que el servicio esté "listo" (ej. que NestJS ya haya terminado de compilar). Si tu servicio depende de otro y falla al inicio por timing, reinícialo con `docker compose restart <servicio>`.
+### Desarrollo híbrido (recomendado)
+
+Levantar backend y blockchain en Docker, y correr el frontend en desarrollo local con hot-reload:
+
+```bash
+# 1. Blockchain (anvil + deploy + blockchain-server)
+cd blockchain-service && docker compose up -d
+
+# 2. Backend
+cd backend && docker compose up -d
+
+# 3. Frontend en local (Node 22+)
+cd frontend
+cp .env.example .env.local
+npm install
+npm run dev
+```
+
+Esto funciona porque los puertos `4000`, `6000` y `8545` están expuestos al host: el navegador (frontend local) alcanza el backend en `localhost:4000`, y el rewrite de `next.config.js` envía `/blockchain/*` a `localhost:6000`. El backend (docker) se comunica con el blockchain por nombre de servicio (`blockchain-server`, `anvil`) dentro de la red compartida.
+
+> Nota: el API del blockchain se llama **`blockchain-server`** dentro de Docker (no `server`). El backend lo referencia como `http://blockchain-server:6000`.
+>
+> `depends_on` controla el **orden de arranque**, no espera a que el servicio esté "listo". Si uno falla por timing al inicio, reinícialo con `docker compose restart <servicio>`.
 
 ## Estructura del repo
 
 ```
 CertChain/
-├── frontend/            → Next.js — portal institucional y público (puerto 3000)
-├── backend/              → NestJS — API principal (puerto 4000)
-├── blockchain-service/   → Emisión/verificación en blockchain (puerto 6000)
-├── llm-service/          → Asistente RAG (puerto 5000, placeholder)
-├── ollama/               → Notas del servicio Ollama (puerto 11434)
-├── docker-compose.yml    → Orquestación de los 5 servicios
-├── .env.example          → Variables de entorno de referencia
-└── README.md             → Este archivo
+├── frontend/            → Next.js (portal). Dockerfile · docker-compose.yml · .env.example
+├── backend/             → NestJS (API). Dockerfile · docker-compose.yml · .env.example
+├── blockchain-service/  → smart contracts (Foundry) + API Express + anvil. docker-compose.yml · .env.example
+├── llm-service/         → FastAPI (RAG). Dockerfile · docker-compose.yml
+├── ollama/              → notas del motor de modelos
+├── docker-compose.yml   → orquesta los módulos (include) sobre la red compartida certchain-network
+├── .env.example         → todas las variables del proyecto
+└── README.md            → este archivo
 ```
 
-Cada carpeta de servicio tiene su propio `README.md` con instrucciones específicas para la persona responsable de esa parte.
+Cada carpeta de servicio tiene su `README.md` con instrucciones específicas para ese servicio.
 
-## Variables de entorno importantes
+## Variables de entorno
 
-- `NEXT_PUBLIC_BACKEND_URL`: la usa el **navegador** del usuario final → debe ser `http://localhost:4000`.
-- `BACKEND_INTERNAL_URL`, `LLM_SERVICE_URL`, `BLOCKCHAIN_SERVICE_URL`, `OLLAMA_URL`: las usan los **contenedores entre sí** → usan el nombre del servicio (ej. `http://backend:4000`).
+> Regla general: las variables con prefijo **`NEXT_PUBLIC_`** se exponen al **navegador** (componentes cliente), así que apuntan a `localhost` (puertos expuestos al host). Las **demás** se usan entre contenedores y apuntan al **nombre del servicio** dentro de Docker (ej. `http://blockchain-server:6000`). No mezclar ambos casos: el navegador no puede resolver `http://backend:4000`.
 
-No mezclar ambos casos: código que corre en el navegador (componentes cliente) no puede resolver `http://backend:4000`.
+### Supabase (requerido por frontend y backend)
 
-## Estado del proyecto
+| Variable | Dónde | Nota |
+|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | frontend (browser) | URL del proyecto. Pública |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | frontend (browser) | Pública por diseño (segura en el navegador) |
+| `SUPABASE_URL` | backend | Misma URL, lado servidor |
+| `SUPABASE_SERVICE_ROLE_KEY` | backend | **SECRETA**. Nunca con prefijo `NEXT_PUBLIC_` |
 
-- [x] Estructura de microservicios y Docker Compose
-- [x] Next.js con rutas institucional/público separadas por middleware
-- [ ] Lógica real de backend (NestJS)
-- [ ] Integración real con blockchain
-- [ ] Lógica real de RAG en `llm-service`
-- [ ] Integración RFID/Arduino
+### Frontend (Next.js)
+
+| Variable | Nota |
+|---|---|
+| `NEXT_PUBLIC_BACKEND_URL` | URL del backend que usa el navegador → `http://localhost:4000` |
+| `NEXT_PUBLIC_BLOCKCHAIN_SERVICE_URL` | Base del rewrite `/blockchain/*` en `next.config.js` → `http://localhost:6000` |
+| `BACKEND_INTERNAL_URL` | URL del backend para código server-side (SSR) → `http://backend:4000` |
+| `NEXT_PUBLIC_SUPABASE_URL` / `...PUBLISHABLE_KEY` | ver Supabase |
+
+### Backend (NestJS)
+
+| Variable | Nota |
+|---|---|
+| `PORT` | puerto (4000) |
+| `FRONTEND_ORIGIN` | CORS: orígenes permitidos → `http://localhost:3000` |
+| `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | ver Supabase |
+| `BLOCKCHAIN_SERVICE_URL` | API del blockchain dentro de Docker → `http://blockchain-server:6000` |
+| `LLM_SERVICE_URL` | llm-service dentro de Docker → `http://llm-service:5000` |
+
+### llm-service (FastAPI)
+
+| Variable | Nota |
+|---|---|
+| `OLLAMA_URL` | → `http://ollama:11434` (o un túnel si Ollama corre en otra máquina) |
+| `OLLAMA_MODEL_LLAMA3` / `OLLAMA_MODEL_MISTRAL` | modelos |
+| `MOCK_CERTIFICADOS` | `true` mientras el endpoint de certificados no exista |
+
+### blockchain-service
+
+Las claves de anvil (cuenta de deploy, admin, emisor) están hardcodeadas en su `docker-compose.yml` **a propósito**: son claves públicas de desarrollo de una cadena local efímera. **Nunca** usar esas claves fuera de un entorno de prueba. Las direcciones de los contratos las escribe el `deploy` en el volumen compartido `shared` — no van en `.env`.

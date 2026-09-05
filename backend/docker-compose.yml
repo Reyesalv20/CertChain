@@ -1,0 +1,35 @@
+# ── Módulo: backend (NestJS) ───────────────────────────────
+# Levantar SOLO el backend desde esta carpeta:
+#   docker compose up -d
+#
+# Para el stack completo usá el docker-compose de la raíz.
+# La red certchain-network tiene nombre fijo (compartida entre servicios).
+# Nota: el backend necesita el blockchain-server corriendo para operaciones
+# de cadena; levantalo desde blockchain-service/ o desde la raíz.
+services:
+  backend:
+    build: .
+    container_name: certchain-backend
+    ports:
+      - "4000:4000"
+    environment:
+      - PORT=${PORT:-4000}
+      # CORS: orígenes permitidos (el frontend en el host).
+      - FRONTEND_ORIGIN=${FRONTEND_ORIGIN:-http://localhost:3000}
+      # Supabase (server-side). Se leen del .env de la raíz.
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      # Servicios internos dentro de la red Docker.
+      # El API del blockchain-service se llama "blockchain-server".
+      - BLOCKCHAIN_SERVICE_URL=${BLOCKCHAIN_SERVICE_URL:-http://blockchain-server:6000}
+      - LLM_SERVICE_URL=${LLM_SERVICE_URL:-http://llm-service:5000}
+    volumes:
+      - ./:/app
+      - /app/node_modules
+    networks:
+      - certchain-network
+
+networks:
+  certchain-network:
+    name: certchain-network
+    driver: bridge

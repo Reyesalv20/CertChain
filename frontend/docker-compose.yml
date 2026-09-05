@@ -1,0 +1,37 @@
+# ── Módulo: frontend (Next.js) ─────────────────────────────
+# Levantar SOLO el frontend desde esta carpeta:
+#   docker compose up -d
+#
+# Para el stack completo usá el docker-compose de la raíz (include de módulos).
+# La red certchain-network tiene nombre fijo: si levantás backend/blockchain
+# desde sus carpetas, todos comparten esta red.
+services:
+  frontend:
+    build: .
+    container_name: certchain-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      # URL que usa el BROWSER -> localhost (puerto expuesto del backend).
+      - NEXT_PUBLIC_BACKEND_URL=${NEXT_PUBLIC_BACKEND_URL:-http://localhost:4000}
+      # URL para SSR (dentro de Docker) -> nombre del servicio backend.
+      - BACKEND_INTERNAL_URL=${BACKEND_INTERNAL_URL:-http://backend:4000}
+      # El navegador fetchea /config y /verifyCertificate del blockchain-service
+      # (a través del rewrite de next.config.js) -> localhost:6000.
+      - NEXT_PUBLIC_BLOCKCHAIN_SERVICE_URL=${NEXT_PUBLIC_BLOCKCHAIN_SERVICE_URL:-http://localhost:6000}
+      # Supabase (públicas). Se leen del .env de la raíz o variables de entorno.
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY}
+      # Evita el prompt de telemetría en "next dev" sin TTY.
+      - NEXT_TELEMETRY_DISABLED=1
+    volumes:
+      - ./:/app
+      - /app/node_modules
+      - /app/.next
+    networks:
+      - certchain-network
+
+networks:
+  certchain-network:
+    name: certchain-network
+    driver: bridge

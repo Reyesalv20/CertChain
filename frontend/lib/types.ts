@@ -48,20 +48,55 @@ export interface MensajeChat {
 // lo guarda/parsea y devuelve los datos que se prellenan en el formulario.
 export interface SubidaCertificado {
   subidaId: string;
+  hash: string;
   nombreEstudiante: string;
   carrera: string;
   fechaEmision: string;
   archivoNombre: string;
 }
 
-export interface DatosRegistroCertificado {
+export interface DatosConfirmacionCertificado {
   subidaId: string;
+  hash: string;
+  txHash: string;
   nombreEstudiante: string;
   carrera: string;
   fechaEmision: string;
+  archivoNombre: string;
+}
+
+// Metadata del certificado guardada en Supabase (vía backend).
+// Mientras el backend no la exponga por hash, se mockea en lib/api.ts.
+export interface MetadataCertificado {
+  nombreEstudiante: string;
+  carrera: string;
+  institucion: string;
+  fechaEmision: string;
+  codigo: string;
 }
 
 export interface CredencialesLogin {
   email: string;
   password: string;
+}
+
+//Agregando 2 nuevas interfaces para el hasheo y emision de certificado
+
+export interface SubidaCertificado {
+  subidaId: string;
+  hash: string;
+  nombreEstudiante: string;
+  carrera: string;
+  fechaEmision: string;
+  archivoNombre: string;
+}
+
+export interface DatosConfirmacionCertificado {
+  subidaId: string;
+  hash: string;
+  txHash: string;
+  nombreEstudiante: string;
+  carrera: string;
+  fechaEmision: string;
+  archivoNombre: string;
 }
