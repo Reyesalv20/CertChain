@@ -154,7 +154,7 @@ Cada carpeta de servicio tiene su `README.md` con instrucciones específicas par
 | Variable | Nota |
 |---|---|
 | `NEXT_PUBLIC_BACKEND_URL` | URL del backend que usa el navegador → `http://localhost:4000` |
-| `NEXT_PUBLIC_BLOCKCHAIN_SERVICE_URL` | Base del rewrite `/blockchain/*` en `next.config.js` → `http://localhost:6000` |
+| `BLOCKCHAIN_SERVICE_URL` | Base del rewrite `/blockchain/*` en `next.config.js` (server-side). Docker → `http://blockchain-server:6000`; local → `http://localhost:6000`. También la usa el backend |
 | `BACKEND_INTERNAL_URL` | URL del backend para código server-side (SSR) → `http://backend:4000` |
 | `NEXT_PUBLIC_SUPABASE_URL` / `...PUBLISHABLE_KEY` | ver Supabase |
 

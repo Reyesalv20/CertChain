@@ -7,9 +7,8 @@ en el backend (NestJS) para que el frontend funcione de punta a punta.
 
 Recordatorio de arquitectura (ver README raíz): el frontend llama al `backend` para
 todo lo que es datos/negocio (login, certificados, chat). La **única excepción** es la
-configuración de los contratos: para firmar con MetaMask, el frontend hace fetch
-directo a `blockchain-service GET /config` (dirección + ABI), vía
-`NEXT_PUBLIC_BLOCKCHAIN_SERVICE_URL`.
+configuración de los contratos: para firmar con MetaMask, el frontend usa el rewrite
+`/blockchain/*` de next.config.js, cuya base es `BLOCKCHAIN_SERVICE_URL`.
 
 ---
 
