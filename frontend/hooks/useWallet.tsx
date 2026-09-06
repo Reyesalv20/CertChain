@@ -1,17 +1,17 @@
 'use client';
 import { useCallback, useEffect, useState, createContext, useContext, type ReactNode } from 'react';
-import { conectar } from '@/lib/wallet';
+import { conectar, type MetaMaskProvider } from '@/lib/wallet';
 
 interface WalletContextValue {
-    cuenta: string | null;
-    conectando: boolean;
-    error: string;
-    conectarWallet: () => Promise<void>;
+  cuenta: string | null;
+  conectando: boolean;
+  error: string;
+  conectarWallet: () => Promise<void>;
 }
 
 const WalletContext = createContext<WalletContextValue | null>(null);
 
-// Proveedor: dueño del estado de la wallet. Envuelve la sección institucional.
+// Proveedor: estado de la wallet (MetaMask). Envuelve la sección institucional.
 export function WalletProvider({ children }: { children: ReactNode }) {
   const [cuenta, setCuenta] = useState<string | null>(null);
   const [conectando, setConectando] = useState(false);
@@ -31,25 +31,25 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   // Escucha cambios de cuenta y de red en MetaMask.
   useEffect(() => {
-        const ethereum = window.ethereum;
-        if (!ethereum?.on) return;
+    const ethereum = window.ethereum as MetaMaskProvider | undefined;
+    if (!ethereum?.on) return;
 
-        const manejarCambioDeCuenta = (accounts: unknown[]) => {
-          setCuenta(accounts.length > 0 ? String(accounts[0]) : null);
-        };
+    const manejarCambioDeCuenta = (accounts: string[]) => {
+      setCuenta(accounts.length > 0 ? accounts[0] : null);
+    };
 
-        const manejarCambioDeRed = () => {
-          window.location.reload();
-        };
+    const manejarCambioDeRed = () => {
+      window.location.reload();
+    };
 
-        ethereum.on('accountsChanged', manejarCambioDeCuenta);
-        ethereum.on('chainChanged', manejarCambioDeRed);
+    ethereum.on('accountsChanged', manejarCambioDeCuenta);
+    ethereum.on('chainChanged', manejarCambioDeRed);
 
-        return () => {
-          ethereum.removeListener('accountsChanged', manejarCambioDeCuenta);
-          ethereum.removeListener('chainChanged', manejarCambioDeRed);
-        };
-      }, []); 
+    return () => {
+      ethereum.removeListener('accountsChanged', manejarCambioDeCuenta);
+      ethereum.removeListener('chainChanged', manejarCambioDeRed);
+    };
+  }, []);
 
   return (
     <WalletContext.Provider value={{ cuenta, conectando, error, conectarWallet }}>

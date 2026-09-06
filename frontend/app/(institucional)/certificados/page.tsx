@@ -8,6 +8,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { BlockchainIcon, FileIcon } from '@/components/icons';
+import { WalletPanel } from '@/components/WalletPanel';
 import { api, ApiError } from '@/lib/api';
 import { registrarCertificado } from '@/lib/wallet';
 import { useWallet } from '@/hooks/useWallet';
@@ -281,24 +282,28 @@ async function handleRegister() {
           )}
         </div>
 
-        <div className="lg:w-64 shrink-0">
-          <div className="bg-white border border-gray-200 rounded-sm p-5 sticky top-24">
-            <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-4">Actividad reciente</h3>
-            {cargandoRecientes ? (
-              <p className="text-xs text-gray-400">Cargando...</p>
-            ) : recientes.length === 0 ? (
-              <p className="text-xs text-gray-400">Todavía no hay certificados emitidos.</p>
-            ) : (
-              <div className="flex flex-col gap-3">
-                {recientes.map((r) => (
-                  <div key={r.codigo} className="border-b border-gray-50 pb-3 last:border-0 last:pb-0">
-                    <p className="font-mono text-xs text-steel">{r.codigo}</p>
-                    <p className="text-xs text-gray-700 mt-0.5">{r.nombreEstudiante}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">{r.fecha}</p>
-                  </div>
-                ))}
-              </div>
-            )}
+        <div className="lg:w-72 shrink-0">
+          <div className="sticky top-24 flex flex-col gap-5">
+            <WalletPanel />
+
+            <div className="bg-white border border-gray-200 rounded-sm p-5">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-4">Actividad reciente</h3>
+              {cargandoRecientes ? (
+                <p className="text-xs text-gray-400">Cargando...</p>
+              ) : recientes.length === 0 ? (
+                <p className="text-xs text-gray-400">Todavía no hay certificados emitidos.</p>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {recientes.map((r) => (
+                    <div key={r.codigo} className="border-b border-gray-50 pb-3 last:border-0 last:pb-0">
+                      <p className="font-mono text-xs text-steel">{r.codigo}</p>
+                      <p className="text-xs text-gray-700 mt-0.5">{r.nombreEstudiante}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">{r.fecha}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

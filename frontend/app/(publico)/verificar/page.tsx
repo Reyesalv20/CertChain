@@ -1,22 +1,30 @@
 'use client';
 
 // Ruta pública: "/verificar"
-// Cualquier persona (empleador, público general) puede verificar un certificado
-// sin necesidad de iniciar sesión. Dos modos:
-//   - "Por código": llama a GET /certificados/verificar?codigo=... en el backend.
-//   - "Por hash (blockchain)": verifica on-chain (blockchain-service) y muestra
-//     la metadata del certificado (mockeada por ahora).
+// Verifica un certificado por: código, hash (blockchain) o tarjeta RFID.
+//   /verificar?card_id=04A224B2  → resuelve la tarjeta y verifica sus certificados on-chain.
+//
+// Modos:
+//   - "Por código": GET /certificados/verificar?codigo=...
+//   - "Por hash": on-chain (blockchain-service) + metadata.
+//   - "Por tarjeta": GET /certificados/por-rfid/:uid → verifica cada cert on-chain.
 
-import { useState, type KeyboardEvent } from 'react';
+import { useEffect, useState, type KeyboardEvent } from 'react';
 import { CheckIcon, ShieldIcon, XIcon } from '@/components/icons';
 import { ChatAssistant } from '@/components/ChatAssistant';
 import { api } from '@/lib/api';
 import { verificarCertificado, type ResultadoVerificacionHash } from '@/lib/blockchain';
-import type { Certificado, MetadataCertificado } from '@/lib/types';
+import type { Certificado, CertificadoTarjeta, MetadataCertificado } from '@/lib/types';
 
 type VerifyState = 'idle' | 'valid' | 'invalid' | 'error';
 type HashState = 'idle' | 'valid' | 'revoked' | 'invalid' | 'error';
-type Modo = 'codigo' | 'hash';
+type Modo = 'codigo' | 'hash' | 'tarjeta';
+
+interface CertTarjetaVerificado {
+  cert: CertificadoTarjeta;
+  onChain: ResultadoVerificacionHash | null;
+  estado: 'valid' | 'revoked' | 'invalid' | 'error';
+}
 
 export default function VerificarPage() {
   const [modo, setModo] = useState<Modo>('codigo');
@@ -27,13 +35,60 @@ export default function VerificarPage() {
   const [certificado, setCertificado] = useState<Certificado | null>(null);
   const [resultadoHash, setResultadoHash] = useState<ResultadoVerificacionHash | null>(null);
   const [metadata, setMetadata] = useState<MetadataCertificado | null>(null);
+  const [tarjetaCerts, setTarjetaCerts] = useState<CertTarjetaVerificado[]>([]);
+  const [tarjetaUid, setTarjetaUid] = useState('');
+  const [tarjetaError, setTarjetaError] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+
+  // Si entran con /verificar?card_id=..., auto-verificar la tarjeta.
+  useEffect(() => {
+    const cardId = new URLSearchParams(window.location.search).get('card_id');
+    if (cardId) {
+      setModo('tarjeta');
+      setQuery(cardId);
+      handleVerificarTarjeta(cardId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function verificarCertTarjeta(c: CertificadoTarjeta): Promise<CertTarjetaVerificado> {
+    try {
+      const onChain = await verificarCertificado(c.hash);
+      if (!onChain.exists) return { cert: c, onChain, estado: 'invalid' };
+      return { cert: c, onChain, estado: onChain.isRevoked ? 'revoked' : 'valid' };
+    } catch {
+      return { cert: c, onChain: null, estado: 'error' };
+    }
+  }
+
+  async function handleVerificarTarjeta(uid: string) {
+    if (!uid.trim()) return;
+    setSearching(true);
+    setTarjetaError('');
+    setErrorMsg('');
+    try {
+      const resultado = await api.obtenerPorTarjeta(uid.trim());
+      setTarjetaUid(resultado.uidRfid);
+      if (resultado.certificados.length === 0) {
+        setTarjetaCerts([]);
+      } else {
+        const verificados = await Promise.all(resultado.certificados.map(verificarCertTarjeta));
+        setTarjetaCerts(verificados);
+      }
+    } catch (err) {
+      setTarjetaCerts([]);
+      setTarjetaError(err instanceof Error ? err.message : 'No se pudo leer la tarjeta.');
+    } finally {
+      setSearching(false);
+    }
+  }
 
   async function handleVerify() {
     const valor = query.trim();
     if (!valor) return;
     setSearching(true);
     setErrorMsg('');
+    setTarjetaError('');
     try {
       if (modo === 'codigo') {
         const resultado = await api.verificarCertificado(valor);
@@ -44,22 +99,23 @@ export default function VerificarPage() {
           setCertificado(null);
           setVerifyState('invalid');
         }
-      } else {
+      } else if (modo === 'hash') {
         const onChain = await verificarCertificado(valor);
         setResultadoHash(onChain);
         if (!onChain.exists) {
           setMetadata(null);
           setHashState('invalid');
         } else {
-          // Metadata desde el backend/Supabase (mockeada por ahora).
           setMetadata(await api.obtenerMetadataPorHash(valor).catch(() => null));
           setHashState(onChain.isRevoked ? 'revoked' : 'valid');
         }
+      } else {
+        await handleVerificarTarjeta(valor);
       }
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'No se pudo verificar el certificado.');
       if (modo === 'codigo') setVerifyState('error');
-      else setHashState('error');
+      else if (modo === 'hash') setHashState('error');
     } finally {
       setSearching(false);
     }
@@ -72,6 +128,9 @@ export default function VerificarPage() {
     setCertificado(null);
     setResultadoHash(null);
     setMetadata(null);
+    setTarjetaCerts([]);
+    setTarjetaUid('');
+    setTarjetaError('');
     setErrorMsg('');
   }
 
@@ -115,6 +174,16 @@ export default function VerificarPage() {
     </button>
   );
 
+  const descripcion =
+    modo === 'codigo'
+      ? 'Ingresa el código impreso en el certificado.'
+      : modo === 'hash'
+        ? 'Ingresa el hash del certificado para verificarlo en la blockchain.'
+        : 'Ingresa el UID de la tarjeta RFID o escaneala desde el prototipo.';
+
+  const placeholder =
+    modo === 'codigo' ? 'Ej: UAX-2024-0847-MENG' : modo === 'hash' ? '0x + 64 hex' : 'Ej: 04A224B2';
+
   return (
     <div className="max-w-2xl mx-auto px-6 py-16">
       <div className="text-center mb-12">
@@ -122,16 +191,13 @@ export default function VerificarPage() {
           Verificación abierta · Sin registro requerido
         </p>
         <h1 className="font-display text-navy text-4xl leading-tight mb-4">¿Es auténtico este certificado?</h1>
-        <p className="text-gray-500 text-sm leading-relaxed max-w-sm mx-auto">
-          {modo === 'codigo'
-            ? 'Ingresa el código impreso en el certificado o escanea el chip RFID de la credencial física.'
-            : 'Ingresa el hash del certificado para verificarlo directamente en la blockchain.'}
-        </p>
+        <p className="text-gray-500 text-sm leading-relaxed max-w-sm mx-auto">{descripcion}</p>
       </div>
 
-      <div className="flex justify-center gap-2 mb-6">
+      <div className="flex flex-wrap justify-center gap-2 mb-6">
         {botonModo('codigo', 'Por código')}
-        {botonModo('hash', 'Por hash (blockchain)')}
+        {botonModo('hash', 'Por hash')}
+        {botonModo('tarjeta', 'Por tarjeta RFID')}
       </div>
 
       <div className="bg-white border border-gray-200 rounded-sm p-6 mb-6">
@@ -141,11 +207,11 @@ export default function VerificarPage() {
             value={query}
             onChange={(e) => {
               const value = e.target.value;
-              if (verifyState !== 'idle' || hashState !== 'idle') reset();
+              if (verifyState !== 'idle' || hashState !== 'idle' || tarjetaCerts.length > 0) reset();
               setQuery(value);
             }}
             onKeyDown={handleKeyDown}
-            placeholder={modo === 'codigo' ? 'Ej: UAX-2024-0847-MENG' : '0x + 64 caracteres hex'}
+            placeholder={placeholder}
             className="flex-1 px-4 py-3 text-sm border border-gray-200 rounded-sm outline-none font-mono tracking-wide focus:border-steel"
           />
           <button
@@ -154,36 +220,14 @@ export default function VerificarPage() {
             className="px-5 py-3 text-sm font-semibold text-white rounded-sm transition-all shrink-0 border-none"
             style={{ backgroundColor: searching ? '#4a8fa8' : '#1F4E5F' }}
           >
-            {searching ? 'Buscando...' : modo === 'codigo' ? 'Verificar' : 'Verificar en blockchain'}
+            {searching ? 'Buscando...' : 'Verificar'}
           </button>
         </div>
-        {modo === 'codigo' && (
-          <>
-            <div className="flex items-center gap-3 mt-3">
-              <div className="flex-1 h-px bg-gray-100" />
-              <span className="text-xs text-gray-400">o</span>
-              <div className="flex-1 h-px bg-gray-100" />
-            </div>
-            <button
-              className="w-full mt-3 py-2.5 text-sm font-medium border border-gray-200 rounded-sm text-gray-600 hover:bg-gray-50 transition-colors flex items-center justify-center gap-2 bg-transparent"
-              disabled
-              title="Requiere lector RFID/QR conectado (integración pendiente con hardware)"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="7" height="7" />
-                <rect x="14" y="3" width="7" height="7" />
-                <rect x="14" y="14" width="7" height="7" />
-                <rect x="3" y="14" width="7" height="7" />
-              </svg>
-              Escanear tarjeta RFID / QR
-            </button>
-          </>
-        )}
       </div>
 
-      {(verifyState === 'error' || hashState === 'error') && (
-        <p className="text-center text-xs text-red-600 mb-6">{errorMsg}</p>
-      )}
+      {((verifyState === 'error' || hashState === 'error' || tarjetaError) && (
+        <p className="text-center text-xs text-red-600 mb-6">{errorMsg || tarjetaError}</p>
+      ))}
 
       {/* ── Modo código ─────────────────────────────────────── */}
       {verifyState === 'valid' && certificado && (
@@ -238,9 +282,8 @@ export default function VerificarPage() {
             </div>
             <div className="bg-white px-5 py-4 border-t border-red-100">
               <p className="text-xs text-gray-500 leading-relaxed">
-                Verifica que el código esté escrito correctamente. Si crees que hay un error, contacta directamente a
-                la institución emisora. Este sistema no puede ser manipulado — todos los certificados auténticos
-                están registrados inmutablemente.
+                Verifica que el código esté escrito correctamente. Este sistema no puede ser manipulado — todos los
+                certificados auténticos están registrados inmutablemente.
               </p>
             </div>
           </div>
@@ -312,12 +355,102 @@ export default function VerificarPage() {
           </div>
           <div className="bg-white px-5 py-4 border-t border-red-100">
             <p className="text-xs text-gray-500 leading-relaxed">
-              Verificá que el hash esté escrito correctamente. Los certificados auténticos quedan registrados
-              de forma inmutable en la blockchain.
+              Verificá que el hash esté escrito correctamente. Los certificados auténticos quedan registrados de forma
+              inmutable en la blockchain.
             </p>
           </div>
         </div>
       )}
+
+      {/* ── Modo tarjeta ────────────────────────────────────── */}
+      {tarjetaCerts.length === 0 && tarjetaUid && !tarjetaError && (
+        <div className="rounded-sm border-2 overflow-hidden" style={{ borderColor: '#c0392b' }}>
+          <div className="flex items-center gap-3 px-5 py-4 bg-[#fdf4f3]">
+            <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-invalid text-white">
+              <XIcon size={16} />
+            </div>
+            <div>
+              <p className="font-semibold text-red-800 text-sm">Tarjeta sin certificados</p>
+              <p className="text-red-700 text-xs">La credencial {tarjetaUid} no tiene certificados asociados.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {tarjetaCerts.length > 0 && (
+        <div className="flex flex-col gap-4">
+          <p className="text-xs text-gray-400 font-mono">
+            Credencial <span className="text-gray-700">{tarjetaUid}</span> · {tarjetaCerts.length} certificado(s)
+          </p>
+          {tarjetaCerts.map((tc) => {
+            const color =
+              tc.estado === 'valid' ? '#1a7a4a' : tc.estado === 'revoked' || tc.estado === 'invalid' ? '#c0392b' : '#b45309';
+            const titulo =
+              tc.estado === 'valid'
+                ? 'Certificado auténtico'
+                : tc.estado === 'revoked'
+                  ? 'Certificado revocado'
+                  : tc.estado === 'invalid'
+                    ? 'No está en la blockchain'
+                    : 'No se pudo verificar';
+            const detalle =
+              tc.estado === 'valid'
+                ? 'Registrado en blockchain · No revocado'
+                : tc.estado === 'revoked'
+                  ? 'Fue revocado on-chain.'
+                  : tc.estado === 'invalid'
+                    ? 'El hash no existe en la cadena.'
+                    : 'Error al consultar la cadena.';
+            return (
+              <div key={tc.cert.codigo} className="rounded-sm border-2 overflow-hidden" style={{ borderColor: color }}>
+                <div
+                  className={`flex items-center gap-3 px-5 py-4 ${tc.estado === 'valid' ? 'bg-[#f0faf4]' : 'bg-[#fdf4f3]'}`}
+                >
+                  <div
+                    className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white"
+                    style={{ backgroundColor: color }}
+                  >
+                    {tc.estado === 'valid' ? <CheckIcon size={16} /> : <XIcon size={16} />}
+                  </div>
+                  <div>
+                    <p className="font-semibold text-sm" style={{ color }}>
+                      {titulo}
+                    </p>
+                    <p className="text-xs text-gray-500">{detalle}</p>
+                  </div>
+                </div>
+                <div className="bg-white px-5 py-4 grid grid-cols-1 sm:grid-cols-2 gap-3 border-t" style={{ borderColor: `${color}33` }}>
+                  <CampoTarjeta label="Institución" value={tc.cert.institucion} />
+                  <CampoTarjeta label="Titular" value={tc.cert.nombreEstudiante} />
+                  <CampoTarjeta label="Carrera" value={tc.cert.carrera} />
+                  <CampoTarjeta label="Fecha de emisión" value={tc.cert.fechaEmision} />
+                  <CampoTarjeta label="Código" value={tc.cert.codigo} />
+                  <CampoTarjeta
+                    label="Verificación on-chain"
+                    value={
+                      tc.onChain
+                        ? `exists=${tc.onChain.exists} · revoked=${tc.onChain.isRevoked}`
+                        : '—'
+                    }
+                  />
+                </div>
+                <div className="bg-gray-50 px-5 py-3">
+                  <p className="text-xs text-gray-400 font-mono break-all">Hash: {tc.cert.hash}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CampoTarjeta({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-0.5">{label}</p>
+      <p className="text-sm text-gray-800 font-medium break-all">{value || '—'}</p>
     </div>
   );
 }

@@ -2,13 +2,13 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-const INSTITUCIONAL_PATHS = ['/dashboard', '/certificados'];
+const PROTECTED_PATHS = ['/dashboard', '/certificados', '/admin'];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const esInstitucional = INSTITUCIONAL_PATHS.some((path) => pathname.startsWith(path));
+  const requiereAuth = PROTECTED_PATHS.some((path) => pathname.startsWith(path));
 
-  if (!esInstitucional) {
+  if (!requiereAuth) {
     return NextResponse.next();
   }
 
@@ -49,5 +49,5 @@ export const config = {
   //No sé exactamente por qué, pero si pongo /dashboard/:path* no funciona, 
   // y si pongo /dashboard sin :path* sí funciona. 
   // Tal vez sea un bug de Next.js 14.0.0-canary.12.
-  matcher: ['/verificar/:path*', '/certificados/:path*'],
+  matcher: ['/verificar/:path*', '/certificados/:path*', '/admin/:path*'],
 };

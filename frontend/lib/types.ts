@@ -8,7 +8,7 @@ export interface Institucion {
   email: string;
 }
 
-export type EstadoCertificado = 'pendiente' | 'registrado';
+export type EstadoCertificado = 'pendiente' | 'registrado' | 'revocado';
 
 export interface Certificado {
   id: string;
@@ -78,6 +78,67 @@ export interface MetadataCertificado {
 export interface CredencialesLogin {
   email: string;
   password: string;
+}
+
+// ── Tarjetas / credenciales físicas (RFID) ──────────────────
+// Contrato de GET /certificados/por-rfid/:uid (ver docs/API_CONTRACT.md).
+export interface CertificadoTarjeta {
+  id: string;
+  codigo: string;
+  nombreEstudiante: string;
+  carrera: string;
+  fechaEmision: string;
+  institucion: string;
+  hash: string;
+  estado: string;
+}
+
+export interface ResultadoTarjeta {
+  uidRfid: string;
+  certificados: CertificadoTarjeta[];
+}
+
+// ── Admin: instituciones, wallets, usuarios ─────────────────
+// Coinciden con el contrato de /admin/* (docs/API_CONTRACT.md).
+export interface InstitucionAdmin {
+  institucion_id: number;
+  nombre: string;
+  wallet_address?: string | null;
+}
+
+export interface DetalleInstitucion extends InstitucionAdmin {
+  cantCertificados?: number;
+}
+
+export interface WalletInstitucion {
+  wallet_id: number;
+  institucion_id?: number;
+  address: string;
+  etiqueta: string | null;
+}
+
+export interface UsuarioAdmin {
+  usuario_id: string;
+  nombre: string;
+  email: string;
+  rol: 'admin' | 'institucional';
+  institucion_id: number | null;
+}
+
+export interface CredencialVinculada {
+  credencial_id: number;
+  uid_rfid: string;
+  etiqueta: string | null;
+}
+
+// Una tarjeta (credencial física) con los certificados a los que está vinculada
+// (muchos-a-muchos vía certificados_credenciales). GET /admin/credenciales.
+export interface CredencialFisica {
+  credencial_id: number;
+  uid_rfid: string;
+  etiqueta: string | null;
+  institucion?: string | null;
+  certificados: CertificadoTarjeta[];
 }
 
 //Agregando 2 nuevas interfaces para el hasheo y emision de certificado
