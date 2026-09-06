@@ -125,18 +125,34 @@ export interface UsuarioAdmin {
   institucion_id: number | null;
 }
 
+// Respuesta de GET /auth/me (backend). Se usa tras el login para redirigir
+// según el rol del usuario.
+export interface UsuarioMe {
+  id: number;
+  authUserId: string;
+  rol: 'admin' | 'institucional';
+  institucionId: number | null;
+  nombre: string | null;
+}
+
+export interface RespuestaMe {
+  usuario: UsuarioMe;
+  institucion: { institucion_id: number; nombre: string } | null;
+}
+
 export interface CredencialVinculada {
   credencial_id: number;
   uid_rfid: string;
   etiqueta: string | null;
 }
 
-// Una tarjeta (credencial física) con los certificados a los que está vinculada
+// Una credencial física (RFID) con los certificados a los que está vinculada
 // (muchos-a-muchos vía certificados_credenciales). GET /admin/credenciales.
 export interface CredencialFisica {
   credencial_id: number;
   uid_rfid: string;
-  etiqueta: string | null;
+  codigo: string | null;
+  fechaEmisionFisica: string | null;
   institucion?: string | null;
   certificados: CertificadoTarjeta[];
 }

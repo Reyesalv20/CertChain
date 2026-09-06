@@ -3,6 +3,9 @@ import {
   Body,
   Controller,
   Get,
+  Param,
+  ParseIntPipe,
+  Patch,
   Post,
   Query,
   Req,
@@ -79,4 +82,43 @@ export class CertificadosController {
 async obtenerMetadataPorHash(@Query('codigo') codigo?: string, @Query('hash') hash?: string) {
   return this.certificados.obtenerMetadataPorHash({ codigo, hash });
 }
+
+  // Público: tarjeta RFID -> credencial + certificados vinculados.
+  @Get('por-rfid/:uid')
+  async porRfid(@Param('uid') uid: string) {
+    return this.certificados.porRfid(uid);
+  }
+
+  // Los métodos con :id van al final para no chocar con las rutas literales.
+  @UseGuards(SupabaseAuthGuard)
+  @Get()
+  async listar(@Req() req: any, @Query('q') q?: string, @Query('estado') estado?: string) {
+    const institucionId = req.institucion?.institucion_id;
+    if (!institucionId) {
+      return this.certificados.listarDeInstitucion(0, {});
+    }
+    return this.certificados.listarDeInstitucion(institucionId, { q, estado });
+  }
+
+  @UseGuards(SupabaseAuthGuard)
+  @Get(':id')
+  async detalle(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.certificados.detalleDeInstitucion(id, req.institucion?.institucion_id ?? 0);
+  }
+
+  @UseGuards(SupabaseAuthGuard)
+  @Patch(':id')
+  async editar(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { nombreEstudiante?: string; carrera?: string; fechaEmision?: string },
+    @Req() req: any,
+  ) {
+    return this.certificados.editarDeInstitucion(id, req.institucion?.institucion_id ?? 0, body);
+  }
+
+  @UseGuards(SupabaseAuthGuard)
+  @Post(':id/revocar')
+  async revocar(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.certificados.revocarCertificado(id, req.institucion?.institucion_id ?? 0);
+  }
 }

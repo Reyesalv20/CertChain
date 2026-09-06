@@ -48,7 +48,7 @@ export function AdminNavbar() {
               Certificados
             </Link>
             <Link href="/admin/credenciales" className={linkClass('/admin/credenciales')}>
-              Tarjetas RFID
+              Credenciales
             </Link>
             <Link href="/admin/usuarios" className={linkClass('/admin/usuarios')}>
               Usuarios
@@ -56,8 +56,8 @@ export function AdminNavbar() {
           </div>
         </div>
         <div className="flex items-center gap-4">
-          <Link href="/dashboard" className="text-white/60 hover:text-white text-sm transition-colors">
-            Ir al portal
+          <Link href="/" className="text-white/60 hover:text-white text-sm transition-colors">
+            Ver sitio público
           </Link>
           <button
             onClick={handleLogout}

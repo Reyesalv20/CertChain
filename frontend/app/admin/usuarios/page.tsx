@@ -12,6 +12,8 @@ export default function AdminUsuariosPage() {
   const [usuarios, setUsuarios] = useState<UsuarioAdmin[]>([]);
   const [instituciones, setInstituciones] = useState<InstitucionAdmin[]>([]);
   const [form, setForm] = useState({ email: '', password: '', nombre: '', rol: 'institucional', institucionId: '' });
+  const [editando, setEditando] = useState<UsuarioAdmin | null>(null);
+  const [edicion, setEdicion] = useState({ nombre: '', email: '', password: '', rol: '', institucionId: '' });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -26,6 +28,44 @@ export default function AdminUsuariosPage() {
     cargar();
     api.obtenerInstituciones().then(setInstituciones).catch(() => setInstituciones([]));
   }, [cargar]);
+
+  function abrirEdicion(u: UsuarioAdmin) {
+    setEdicion({
+      nombre: u.nombre,
+      email: u.email,
+      password: '',
+      rol: u.rol,
+      institucionId: u.institucion_id != null ? String(u.institucion_id) : '',
+    });
+    setEditando(u);
+    setError('');
+  }
+
+  async function guardarEdicion() {
+    if (!editando || busy) return;
+    if (edicion.rol === 'institucional' && !edicion.institucionId) {
+      setError('Elegí la institución para el usuario institucional.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      const datos = {
+        nombre: edicion.nombre,
+        email: edicion.email,
+        rol: edicion.rol,
+        institucionId: edicion.rol === 'institucional' ? Number(edicion.institucionId) : null,
+        ...(edicion.password ? { password: edicion.password } : {}),
+      };
+      await api.actualizarUsuario(editando.usuario_id, datos);
+      setEditando(null);
+      cargar();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'No se pudo actualizar el usuario.');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function crear() {
     if (!form.email || !form.password || !form.nombre || busy) return;
@@ -117,11 +157,73 @@ export default function AdminUsuariosPage() {
                   {u.institucion_id ? ` · ${institucionNombre(u.institucion_id)}` : ''}
                 </p>
               </div>
-              <button onClick={() => eliminar(u.usuario_id)} className="text-xs text-red-600 hover:text-red-700 bg-transparent border-none cursor-pointer">
-                Eliminar
-              </button>
+              <div className="flex items-center gap-4">
+                <button onClick={() => abrirEdicion(u)} className="text-xs text-steel hover:text-navy bg-transparent border-none cursor-pointer">
+                  Editar
+                </button>
+                <button onClick={() => eliminar(u.usuario_id)} className="text-xs text-red-600 hover:text-red-700 bg-transparent border-none cursor-pointer">
+                  Eliminar
+                </button>
+              </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Editar usuario */}
+      {editando && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-sm w-full max-w-md p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold text-gray-700">Editar usuario</h2>
+              <button onClick={() => setEditando(null)} className="text-gray-400 hover:text-gray-600 bg-transparent border-none cursor-pointer text-lg leading-none">
+                ×
+              </button>
+            </div>
+            <div className="flex flex-col gap-3">
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 mb-1">Nombre</label>
+                <input value={edicion.nombre} onChange={(e) => setEdicion({ ...edicion, nombre: e.target.value })} placeholder="Nombre completo" className="w-full px-3 py-2 text-sm border border-gray-200 rounded-sm outline-none" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 mb-1">Email</label>
+                <input value={edicion.email} onChange={(e) => setEdicion({ ...edicion, email: e.target.value })} type="email" className="w-full px-3 py-2 text-sm border border-gray-200 rounded-sm outline-none" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 mb-1">Rol</label>
+                <select value={edicion.rol} onChange={(e) => setEdicion({ ...edicion, rol: e.target.value })} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-sm outline-none bg-white">
+                  <option value="institucional">Institucional</option>
+                  <option value="admin">Administrador</option>
+                </select>
+              </div>
+              {edicion.rol === 'institucional' && (
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 mb-1">Institución</label>
+                  <select value={edicion.institucionId} onChange={(e) => setEdicion({ ...edicion, institucionId: e.target.value })} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-sm outline-none bg-white">
+                    <option value="">Seleccioná la institución...</option>
+                    {instituciones.map((i) => (
+                      <option key={i.institucion_id} value={i.institucion_id}>
+                        {i.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 mb-1">Nueva contraseña (opcional)</label>
+                <input value={edicion.password} onChange={(e) => setEdicion({ ...edicion, password: e.target.value })} type="password" placeholder="Dejalo vacío para no cambiarla" className="w-full px-3 py-2 text-sm border border-gray-200 rounded-sm outline-none" />
+              </div>
+              {error && <p className="text-xs text-red-600">{error}</p>}
+              <div className="flex justify-end gap-3 mt-2">
+                <button onClick={() => setEditando(null)} className="px-4 py-2 text-sm font-semibold text-gray-600 bg-transparent border border-gray-300 rounded-sm cursor-pointer">
+                  Cancelar
+                </button>
+                <button onClick={guardarEdicion} disabled={busy} className="px-4 py-2 text-sm font-semibold text-white rounded-sm border-none disabled:opacity-50" style={{ backgroundColor: '#1F4E5F' }}>
+                  {busy ? 'Guardando...' : 'Guardar'}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

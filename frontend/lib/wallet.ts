@@ -71,3 +71,45 @@ export async function registrarCertificado(certHash: string): Promise<string> {
     throw new Error(formatearErrorFirma(err));
   }
 }
+
+// Registra una wallet como emisor confiable (addIssuer) en el contrato de
+// emisores. Solo la firma el admin del contrato (cuenta que lo desplegó).
+export async function registrarEmisor(address: string, nombre: string): Promise<string> {
+  const ethereum = window.ethereum;
+  if (!ethereum) throw new Error('Instala MetaMask y desbloquea tu wallet');
+
+  try {
+    const config = await obtenerConfig();
+    const provider = new BrowserProvider(ethereum);
+    const signer = await provider.getSigner();
+    const contrato = new Contract(config.registry.address, config.registry.abi, signer);
+
+    await contrato.addIssuer.staticCall(address, nombre);
+    const tx = await contrato.addIssuer(address, nombre);
+    await tx.wait();
+    return tx.hash;
+  } catch (err) {
+    throw new Error(formatearErrorFirma(err));
+  }
+}
+
+// Revoca on-chain un certificado (revokeCertificate). Solo puede firmarlo el
+// emisor original (el que lo registró) o el admin del registry.
+export async function revocarCertificadoOnChain(certHash: string): Promise<string> {
+  const ethereum = window.ethereum;
+  if (!ethereum) throw new Error('Instala MetaMask y desbloquea tu wallet');
+
+  try {
+    const config = await obtenerConfig();
+    const provider = new BrowserProvider(ethereum);
+    const signer = await provider.getSigner();
+    const contrato = new Contract(config.certificates.address, config.certificates.abi, signer);
+
+    await contrato.revokeCertificate.staticCall(certHash);
+    const tx = await contrato.revokeCertificate(certHash);
+    await tx.wait();
+    return tx.hash;
+  } catch (err) {
+    throw new Error(formatearErrorFirma(err));
+  }
+}

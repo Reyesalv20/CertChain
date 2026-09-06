@@ -129,7 +129,7 @@ export class CertificadosService {
   let query = this.supabase.client
     .from('certificados')
     .select(
-      'id_certificado, codigo, nombre_estudiante, carrera, fecha_titulacion, hash_certificado, estado, fecha_creacion, institucion_id, instituciones(institucion_id, nombre, wallet_address)',
+      'id_certificado, codigo, nombre_estudiante, carrera, fecha_titulacion, hash_certificado, estado, fecha_creacion, institucion_id',
     );
 
   query = params.hash ? query.eq('hash_certificado', params.hash) : query.eq('codigo', params.codigo!);
@@ -138,7 +138,7 @@ export class CertificadosService {
 
   if (!data) return { valido: false };
 
-  const institucion = (data as any).instituciones;
+  const institucion = await this.obtenerNombreYWallet(data.institucion_id);
 
   return {
     valido: true,
@@ -153,11 +153,142 @@ export class CertificadosService {
       estado: data.estado,
       institucionId: data.institucion_id,
       institucion: institucion?.nombre ?? null,
-      institucionWallet: institucion?.wallet_address ?? null,
+      institucionWallet: institucion?.address ?? null,
       rfid: null,
     },
   };
 }
+
+  // Lista los certificados de una institución (para su panel).
+  async listarDeInstitucion(institucionId: number, filtro?: { q?: string; estado?: string }) {
+    let query = this.supabase.client
+      .from('certificados')
+      .select(
+        'id_certificado, codigo, nombre_estudiante, carrera, fecha_titulacion, fecha_creacion, hash_certificado, estado, institucion_id',
+      )
+      .eq('institucion_id', institucionId)
+      .order('fecha_creacion', { ascending: false });
+
+    if (filtro?.estado) query = query.eq('estado', filtro.estado);
+    if (filtro?.q) {
+      query = query.or(`nombre_estudiante.ilike.%${filtro.q}%,carrera.ilike.%${filtro.q}%,codigo.ilike.%${filtro.q}%`);
+    }
+
+    const { data, error } = await query;
+    if (error) throw new BadRequestException(error.message);
+
+    const institucion = await this.obtenerNombreYWallet(institucionId);
+
+    return (data ?? []).map((c) => this.mapearCertificado(c, institucion?.nombre ?? null, institucion?.address ?? null));
+  }
+
+  // Detalle de un certificado propio (scoped por institución).
+  async detalleDeInstitucion(id: number, institucionId: number) {
+    const { data, error } = await this.supabase.client
+      .from('certificados')
+      .select(
+        'id_certificado, codigo, nombre_estudiante, carrera, fecha_titulacion, fecha_creacion, hash_certificado, estado, institucion_id',
+      )
+      .eq('id_certificado', id)
+      .eq('institucion_id', institucionId)
+      .maybeSingle();
+
+    if (error) throw new BadRequestException(error.message);
+    if (!data) throw new BadRequestException('Certificado no encontrado.');
+
+    const institucion = await this.obtenerNombreYWallet(institucionId);
+    return this.mapearCertificado(data, institucion?.nombre ?? null, institucion?.address ?? null);
+  }
+
+  // Marca como revocado un certificado propio (el cliente ya lo revocó on-chain).
+  async revocarCertificado(id: number, institucionId: number) {
+    const { data, error } = await this.supabase.client
+      .from('certificados')
+      .update({ estado: 'revocado' })
+      .eq('id_certificado', id)
+      .eq('institucion_id', institucionId)
+      .select(
+        'id_certificado, codigo, nombre_estudiante, carrera, fecha_titulacion, fecha_creacion, hash_certificado, estado, institucion_id',
+      )
+      .maybeSingle();
+
+    if (error || !data) throw new BadRequestException('No se pudo revocar el certificado.');
+    const institucion = await this.obtenerNombreYWallet(institucionId);
+    return this.mapearCertificado(data, institucion?.nombre ?? null, institucion?.address ?? null);
+  }
+
+  // Edita la metadata off-chain de un certificado propio (scoped por institución).
+  async editarDeInstitucion(
+    id: number,
+    institucionId: number,
+    cambios: { nombreEstudiante?: string; carrera?: string; fechaEmision?: string },
+  ) {
+    const fila: Record<string, unknown> = {};
+    if (cambios.nombreEstudiante !== undefined) fila.nombre_estudiante = cambios.nombreEstudiante?.trim() || null;
+    if (cambios.carrera !== undefined) fila.carrera = cambios.carrera?.trim() || null;
+    if (cambios.fechaEmision !== undefined) fila.fecha_titulacion = cambios.fechaEmision || null;
+
+    if (Object.keys(fila).length === 0) throw new BadRequestException('No hay campos para actualizar.');
+
+    const { data, error } = await this.supabase.client
+      .from('certificados')
+      .update(fila)
+      .eq('id_certificado', id)
+      .eq('institucion_id', institucionId)
+      .select(
+        'id_certificado, codigo, nombre_estudiante, carrera, fecha_titulacion, fecha_creacion, hash_certificado, estado, institucion_id',
+      )
+      .maybeSingle();
+
+    if (error || !data) throw new BadRequestException('Certificado no encontrado.');
+    const institucion = await this.obtenerNombreYWallet(institucionId);
+    return this.mapearCertificado(data, institucion?.nombre ?? null, institucion?.address ?? null);
+  }
+
+  // Público: tarjeta RFID -> credencial + sus certificados.
+  async porRfid(uid: string) {
+    const { data: credencial } = await this.supabase.client
+      .from('credenciales_fisicas')
+      .select('id, uid_rfid, codigo, fecha_emision_fisica')
+      .eq('uid_rfid', uid)
+      .maybeSingle();
+
+    if (!credencial) return { valido: false, mensaje: 'No se encontró ninguna tarjeta con ese UID.' };
+
+    const { data: vinculos } = await this.supabase.client
+      .from('certificados_credenciales')
+      .select('certificados_id')
+      .eq('credenciales_fisicas_id', credencial.id);
+
+    const ids = (vinculos ?? []).map((v) => v.certificados_id);
+    let certificados: any[] = [];
+
+    if (ids.length > 0) {
+      const { data: datos } = await this.supabase.client
+        .from('certificados')
+        .select(
+          'id_certificado, codigo, nombre_estudiante, carrera, fecha_titulacion, fecha_creacion, hash_certificado, estado, institucion_id',
+        )
+        .in('id_certificado', ids);
+
+      const instIds = [...new Set((datos ?? []).map((c) => c.institucion_id))];
+      const instMap = await this.obtenerNombresWallets(instIds);
+      certificados = (datos ?? []).map((c) =>
+        this.mapearCertificado(c, instMap.get(c.institucion_id)?.nombre ?? null, instMap.get(c.institucion_id)?.address ?? null),
+      );
+    }
+
+    return {
+      valido: true,
+      credencial: {
+        id: String(credencial.id),
+        uid: credencial.uid_rfid,
+        codigo: credencial.codigo,
+        fechaEmisionFisica: credencial.fecha_emision_fisica,
+      },
+      certificados,
+    };
+  }
 
   async verificar(codigo: string) {
     const { data } = await this.supabase.client
@@ -182,6 +313,57 @@ export class CertificadosService {
         estado: data.estado,
       },
     };
+  }
+
+  // ---------- helpers ----------
+
+  private mapearCertificado(
+    c: any,
+    institucion: string | null,
+    institucionWallet: string | null,
+  ) {
+    return {
+      id: String(c.id_certificado),
+      codigo: c.codigo,
+      nombreEstudiante: c.nombre_estudiante,
+      carrera: c.carrera,
+      fechaEmision: c.fecha_titulacion,
+      fechaCreacion: c.fecha_creacion,
+      hash: c.hash_certificado,
+      estado: c.estado,
+      institucionId: c.institucion_id,
+      institucion,
+      institucionWallet,
+      rfid: null,
+    };
+  }
+
+  private async obtenerNombreYWallet(institucionId: number) {
+    const mapa = await this.obtenerNombresWallets([institucionId]);
+    return mapa.get(institucionId) ?? null;
+  }
+
+  private async obtenerNombresWallets(institucionIds: number[]): Promise<Map<number, { nombre: string; address: string | null }>> {
+    const mapa = new Map<number, { nombre: string; address: string | null }>();
+    if (institucionIds.length === 0) return mapa;
+
+    const { data: instituciones } = await this.supabase.client
+      .from('instituciones')
+      .select('institucion_id, nombre')
+      .in('institucion_id', institucionIds);
+
+    const { data: wallets } = await this.supabase.client
+      .from('institucion_wallets')
+      .select('institucion_id, address')
+      .in('institucion_id', institucionIds);
+
+    for (const i of instituciones ?? []) {
+      mapa.set(i.institucion_id, {
+        nombre: i.nombre,
+        address: (wallets ?? []).find((w) => w.institucion_id === i.institucion_id)?.address ?? null,
+      });
+    }
+    return mapa;
   }
 
   private generarHash(pdfBuffer: Buffer): string {
