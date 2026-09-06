@@ -10,7 +10,20 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { ShieldIcon } from '@/components/icons';
 import { CertSeal } from '@/components/CertSeal';
 import { createClient } from '@/lib/supabase/client';
-//import { api, ApiError } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
+
+// Ruta inicial según el rol: admin -> panel admin; institucional -> dashboard.
+// Si venía de una página protegida (?redirect=...), se respeta solo si esa
+// página corresponde al rol del usuario.
+function destinoSegunRol(rol: string | null, redirect: string | null): string {
+  const esAdmin = rol === 'admin';
+  const areasPermitidas = esAdmin ? ['/admin'] : ['/dashboard', '/certificados'];
+
+  if (redirect && areasPermitidas.some((a) => redirect.startsWith(a))) {
+    return redirect;
+  }
+  return esAdmin ? '/admin/instituciones' : '/dashboard';
+}
 
 // useSearchParams necesita un límite <Suspense> para no des-optimizar
 // el resto de la página durante el build estático de Next.js.
@@ -46,14 +59,24 @@ function LoginForm() {
       password,
     });
 
-    console.log('login result:', data, authError); // debug temporal, quítalo después
-
     if (authError) {
       setError(authError.message);
       return;
     }
 
-    const redirectTo = searchParams.get('redirect') || '/dashboard';
+    // Pide el rol del usuario (tabla usuarios en el backend) para redirigirlo
+    // al área correcta: /admin/* si es admin, /dashboard si es institucional.
+    let rol: string | null = null;
+    try {
+      const me = await api.obtenerMe();
+      rol = me.usuario?.rol ?? null;
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'No se pudo consultar tu rol.';
+      setError(msg);
+      return;
+    }
+
+    const redirectTo = destinoSegunRol(rol, searchParams.get('redirect'));
     router.push(redirectTo);
     router.refresh();
   } catch (err) {

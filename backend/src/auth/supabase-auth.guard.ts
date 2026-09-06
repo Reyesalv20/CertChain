@@ -2,6 +2,17 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
 import { SupabaseService } from '../supabase/supabase.service';
 
+export interface UsuarioContext {
+  id: number;
+  authUserId: string;
+  rol: string | null;
+  institucionId: number | null;
+  nombre: string | null;
+}
+
+// Valida el JWT de Supabase y adjunta el usuario de la plataforma (tabla
+// `usuarios`, vinculada por auth_user_id). Si tiene institución, adjunta
+// también request.institucion = { institucion_id, nombre }.
 @Injectable()
 export class SupabaseAuthGuard implements CanActivate {
   constructor(private readonly supabase: SupabaseService) {}
@@ -17,28 +28,44 @@ export class SupabaseAuthGuard implements CanActivate {
     const token = authHeader.slice('Bearer '.length);
     const { data, error } = await this.supabase.client.auth.getUser(token);
 
-    console.log('DEBUG guard -> error de getUser:', error);
-    console.log('DEBUG guard -> data.user:', data?.user);
-
     if (error || !data.user) {
       throw new UnauthorizedException('Token inválido o expirado.');
     }
 
-    // Busca la institución vinculada a este usuario de Supabase
-    const { data: institucion, error: institucionError } = await this.supabase.client
-      .from('instituciones')
-      .select('institucion_id, nombre, wallet_address')
+    const { data: usuario, error: usuarioError } = await this.supabase.client
+      .from('usuarios')
+      .select('id, auth_user_id, rol, institucion_id, nombre')
       .eq('auth_user_id', data.user.id)
       .single();
 
-    console.log('DEBUG guard -> institucion encontrada:', institucion);
-    console.log('DEBUG guard -> institucionError:', institucionError);
-
-    if (institucionError || !institucion) {
-      throw new UnauthorizedException('Este usuario no está vinculado a ninguna institución.');
+    if (usuarioError || !usuario) {
+      throw new UnauthorizedException('Este usuario no tiene acceso a la plataforma.');
     }
 
-    request.institucion = institucion;
+    const ctx: UsuarioContext = {
+      id: usuario.id,
+      authUserId: data.user.id,
+      rol: usuario.rol,
+      institucionId: usuario.institucion_id,
+      nombre: usuario.nombre,
+    };
+    request.usuario = ctx;
+
+    if (ctx.institucionId != null) {
+      const { data: institucion, error: institucionError } = await this.supabase.client
+        .from('instituciones')
+        .select('institucion_id, nombre')
+        .eq('institucion_id', ctx.institucionId)
+        .single();
+
+      if (!institucionError && institucion) {
+        request.institucion = {
+          institucion_id: institucion.institucion_id,
+          nombre: institucion.nombre,
+        };
+      }
+    }
+
     return true;
   }
 }

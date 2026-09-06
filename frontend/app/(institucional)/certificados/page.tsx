@@ -1,307 +1,107 @@
 'use client';
 
-// Ruta protegida: "/certificados" (requiere cookie certchain_token, ver middleware.ts)
-// Flujo en tres pasos:
-//  1. POST /certificados/procesar -> backend devuelve OCR + hash (mock)
-//  2. firma registerCertificate(hash) con MetaMask -> se registra on-chain
-//  3. POST /certificados/confirmar -> backend persiste metadata + hash en la DB
+// Ruta protegida: "/certificados" (requiere sesión, ver middleware.ts)
+// Lista TODOS los certificados de la institución del usuario. Cada uno enlaza a
+// su vista de detalle (editar metadata / revocar) y a la verificación pública.
 
-import { useEffect, useRef, useState } from 'react';
-import { BlockchainIcon, FileIcon } from '@/components/icons';
+import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { api, ApiError } from '@/lib/api';
-import { registrarCertificado } from '@/lib/wallet';
-import { useWallet } from '@/hooks/useWallet';
-import type { ActividadReciente, SubidaCertificado } from '@/lib/types';
+import type { Certificado } from '@/lib/types';
 
-type Paso = 'idle' | 'subiendo' | 'subido' | 'registrando' | 'registrado';
+const COLOR_ESTADO: Record<string, { fg: string; bg: string; bd: string }> = {
+  registrado: { fg: '#1a7a4a', bg: '#f0faf4', bd: '#bce6cd' },
+  revocado: { fg: '#c0392b', bg: '#fdf4f3', bd: '#f1c4bf' },
+  pendiente: { fg: '#b45309', bg: '#fdf6ec', bd: '#f3dcb3' },
+};
 
-export default function CertificadosPage() {
-  const [paso, setPaso] = useState<Paso>('idle');
-  const [dragOver, setDragOver] = useState(false);
-  const [archivoNombre, setArchivoNombre] = useState('');
-  const [subida, setSubida] = useState<SubidaCertificado | null>(null);
-  const [nombreEstudiante, setNombreEstudiante] = useState('');
-  const [carrera, setCarrera] = useState('');
-  const [fechaEmision, setFechaEmision] = useState('');
-  const [hash, setHash] = useState('');
-  const [txHash, setTxHash] = useState('');
+export default function CertificadosListaPage() {
+  const [certs, setCerts] = useState<Certificado[]>([]);
+  const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
-  const [recientes, setRecientes] = useState<ActividadReciente[]>([]);
-  const [cargandoRecientes, setCargandoRecientes] = useState(true);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const { cuenta } = useWallet();
 
-  useEffect(() => {
+  const cargar = useCallback(() => {
+    setCargando(true);
     api
-      .obtenerRecientes()
-      .then(setRecientes)
-      .catch(() => setRecientes([]))
-      .finally(() => setCargandoRecientes(false));
-  }, [paso === 'registrado']);
+      .listarCertificadosInstitucion()
+      .then((lista) => {
+        setCerts(lista);
+        setError('');
+      })
+      .catch((e) => setError(e instanceof ApiError ? e.message : 'No se pudieron cargar los certificados.'))
+      .finally(() => setCargando(false));
+  }, []);
 
-  async function handleFile(file: File | undefined) {
-    if (!file) return;
-    setError('');
-    setArchivoNombre(file.name);
-    setPaso('subiendo');
-    try {
-      const resultado = await api.procesarCertificado(file);
-      setSubida(resultado);
-      setHash(resultado.hash);
-      setNombreEstudiante(resultado.nombreEstudiante);
-      setCarrera(resultado.carrera);
-      setFechaEmision(resultado.fechaEmision);
-      setPaso('subido');
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No se pudo subir el archivo.');
-      setPaso('idle');
-    }
-  }
-
-async function handleRegister() {
-    if (!subida) return;
-    if (!cuenta) {
-      setError('Conectá tu wallet (MetaMask) para firmar el registro.');
-      return;
-    }
-    setPaso('registrando');
-    setError('');
-    try {
-      // 1) Firmar on-chain con MetaMask.
-      const tx = await registrarCertificado(hash);
-      setTxHash(tx);
-      // 2) Persistir metadata + hash en Supabase (backend /certificados/confirmar).
-      await api.confirmarCertificado({
-        subidaId: subida.subidaId,
-        hash,
-        txHash: tx,
-        nombreEstudiante,
-        carrera,
-        fechaEmision,
-        archivoNombre: subida.archivoNombre,
-      });
-      setPaso('registrado');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo registrar el certificado.');
-      setPaso('subido');
-    }
-  }
-
-  function reset() {
-    setPaso('idle');
-    setArchivoNombre('');
-    setSubida(null);
-    setNombreEstudiante('');
-    setCarrera('');
-    setFechaEmision('');
-    setHash('');
-    setTxHash('');
-    setError('');
-  }
-
-  const isRegistered = paso === 'registrado';
-  const isBusy = paso === 'subiendo' || paso === 'registrando';
+  useEffect(cargar, [cargar]);
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-10">
-      <div className="flex items-center gap-2 text-xs text-gray-400 mb-8 font-mono uppercase tracking-widest">
-        <span>Portal institucional</span>
-        <span>/</span>
-        <span className="text-steel">Emisión de certificado</span>
+    <div className="max-w-5xl mx-auto px-6 py-10">
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <div className="flex items-center gap-2 text-xs text-gray-400 mb-2 font-mono uppercase tracking-widest">
+            <span>Portal institucional</span>
+            <span>/</span>
+            <span className="text-steel">Certificados</span>
+          </div>
+          <h1 className="font-display text-navy text-3xl mb-1">Mis certificados</h1>
+          <p className="text-gray-500 text-sm">Todos los certificados emitidos por tu institución.</p>
+        </div>
+        <Link
+          href="/certificados/emitir"
+          className="px-5 py-2.5 text-sm font-semibold text-white rounded-sm bg-navy no-underline"
+        >
+          + Emitir nuevo
+        </Link>
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-8">
-        <div className="flex-1">
-          <div className="flex items-center justify-between mb-6">
-            <h1 className="font-display text-navy text-3xl">Emitir certificado</h1>
-            {isRegistered && (
-              <button onClick={reset} className="text-xs text-gray-400 hover:text-gray-600 transition-colors bg-transparent border-none">
-                + Nuevo certificado
-              </button>
-            )}
-          </div>
+      {error && <p className="text-xs text-red-600 mb-4">{error}</p>}
 
-          {error && (
-            <div className="rounded-sm border border-red-200 bg-red-50 px-4 py-3 mb-5">
-              <p className="text-red-700 text-xs">{error}</p>
-            </div>
-          )}
-
-          {!isRegistered && (
-            <div
-              className={`rounded-sm border-2 border-dashed transition-all mb-6 cursor-pointer ${
-                dragOver ? 'border-steel bg-blue-50/60' : 'border-gray-200 bg-white'
-              }`}
-              style={{ minHeight: 160 }}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDragOver(true);
-              }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setDragOver(false);
-                if (paso === 'idle') handleFile(e.dataTransfer.files?.[0]);
-              }}
-              onClick={() => paso === 'idle' && fileInputRef.current?.click()}
-            >
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf"
-                className="hidden"
-                onChange={(e) => handleFile(e.target.files?.[0])}
-              />
-              {paso === 'idle' ? (
-                <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
-                  <div className="mb-4 text-gray-300">
-                    <FileIcon size={44} />
-                  </div>
-                  <p className="text-gray-700 font-medium text-sm mb-1">Arrastra el PDF aquí</p>
-                  <p className="text-gray-400 text-xs">o haz clic para seleccionar · Solo archivos .pdf</p>
-                </div>
-              ) : (
-                <div className="flex items-center gap-4 px-6 py-5">
-                  <div className="text-steel">
-                    <FileIcon size={32} />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-800">{archivoNombre}</p>
-                    <p className="text-xs text-gray-400 font-mono mt-0.5">
-                      {paso === 'subiendo' ? 'Subiendo...' : 'PDF cargado'}
-                    </p>
-                  </div>
-                  {paso !== 'subiendo' && (
-                    <div className="ml-auto">
-                      <span className="text-xs font-semibold text-green-700 bg-green-50 px-2 py-1 rounded-full border border-green-200">
-                        Cargado
-                      </span>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {isRegistered && (
-            <div className="rounded-sm border border-green-200 bg-green-50 p-5 mb-6">
-              <p className="font-semibold text-green-800 text-sm">Certificado registrado en blockchain</p>
-              <p className="text-green-700 text-xs mt-1">La transacción ha sido confirmada y es permanente.</p>
-            </div>
-          )}
-
-          {paso !== 'idle' && paso !== 'subiendo' && (
-            <div className="bg-white border border-gray-200 rounded-sm p-6 flex flex-col gap-5">
-              <h2 className="text-xs font-semibold uppercase tracking-widest text-gray-400 border-b border-gray-100 pb-3">
-                Datos del certificado
-              </h2>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1.5">
-                    Nombre del estudiante
-                  </label>
-                  <input
-                    type="text"
-                    value={nombreEstudiante}
-                    onChange={(e) => setNombreEstudiante(e.target.value)}
-                    disabled={isRegistered}
-                    className="w-full px-3 py-2.5 text-sm rounded-sm border border-gray-200 outline-none disabled:bg-gray-50 disabled:text-gray-600"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1.5">
-                    Fecha de emisión
-                  </label>
-                  <input
-                    type="date"
-                    value={fechaEmision}
-                    onChange={(e) => setFechaEmision(e.target.value)}
-                    disabled={isRegistered}
-                    className="w-full px-3 py-2.5 text-sm rounded-sm border border-gray-200 outline-none disabled:bg-gray-50 disabled:text-gray-600"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1.5">
-                  Carrera / Programa
-                </label>
-                <input
-                  type="text"
-                  value={carrera}
-                  onChange={(e) => setCarrera(e.target.value)}
-                  disabled={isRegistered}
-                  className="w-full px-3 py-2.5 text-sm rounded-sm border border-gray-200 outline-none disabled:bg-gray-50 disabled:text-gray-600"
-                />
-              </div>
-
-                <div>
-                    <label className="block text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1.5">
-                      Hash blockchain
-                    </label>
-                    <input
-                      type="text"
-                      value={hash}
-                      onChange={(e) => setHash(e.target.value)}
-                      disabled={isRegistered}
-                      placeholder="0x + 64 caracteres hex"
-                      className="w-full px-3 py-2.5 text-sm rounded-sm border border-gray-200 outline-none font-mono disabled:bg-gray-50 disabled:text-gray-600"
-                    />
-                </div>
-                {isRegistered && txHash && (
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1.5">
-                    Transacción
-                  </label>
-                  <div className="bg-gray-50 border border-gray-200 rounded-sm px-3 py-2.5">
-                    <p className="font-mono text-xs text-gray-600 break-all">{txHash}</p>
-                  </div>
-                </div>
-              )} 
-
-            </div>
-          )}
-
-          {paso === 'subido' && (
-            <button
-              onClick={handleRegister}
-              className="mt-5 flex items-center gap-2.5 px-6 py-3 text-sm font-semibold text-white rounded-sm bg-navy border-none"
-            >
-              <BlockchainIcon size={16} />
-              Registrar en blockchain
-            </button>
-          )}
-
-          {paso === 'registrando' && (
-            <div className="mt-5 flex items-center gap-3 px-5 py-3.5 bg-white border border-gray-200 rounded-sm">
-              <div className="w-4 h-4 rounded-full border-2 border-steel border-t-transparent animate-spin" />
-              <span className="text-sm text-gray-600 font-mono">Registrando en blockchain...</span>
-            </div>
-          )}
+      {cargando ? (
+        <p className="text-sm text-gray-400">Cargando...</p>
+      ) : certs.length === 0 ? (
+        <div className="bg-white border border-gray-200 rounded-sm p-8 text-center">
+          <p className="text-sm text-gray-400 mb-2">Todavía no emitiste certificados.</p>
+          <Link href="/certificados/emitir" className="text-sm text-steel hover:underline">
+            Emitir el primero →
+          </Link>
         </div>
-
-        <div className="lg:w-64 shrink-0">
-          <div className="bg-white border border-gray-200 rounded-sm p-5 sticky top-24">
-            <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-4">Actividad reciente</h3>
-            {cargandoRecientes ? (
-              <p className="text-xs text-gray-400">Cargando...</p>
-            ) : recientes.length === 0 ? (
-              <p className="text-xs text-gray-400">Todavía no hay certificados emitidos.</p>
-            ) : (
-              <div className="flex flex-col gap-3">
-                {recientes.map((r) => (
-                  <div key={r.codigo} className="border-b border-gray-50 pb-3 last:border-0 last:pb-0">
-                    <p className="font-mono text-xs text-steel">{r.codigo}</p>
-                    <p className="text-xs text-gray-700 mt-0.5">{r.nombreEstudiante}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">{r.fecha}</p>
-                  </div>
-                ))}
+      ) : (
+        <div className="flex flex-col gap-2">
+          {certs.map((c) => {
+            const color = COLOR_ESTADO[c.estado] ?? COLOR_ESTADO.pendiente;
+            return (
+              <div
+                key={c.id}
+                className="bg-white border border-gray-200 rounded-sm px-5 py-3 flex items-center justify-between gap-4"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-800 truncate">{c.nombreEstudiante}</p>
+                  <p className="text-xs text-gray-400 font-mono truncate">
+                    {c.codigo} · {c.carrera || '—'} · {c.fechaEmision || '—'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <span
+                    className="text-[11px] font-semibold px-2 py-0.5 rounded-full border uppercase tracking-wide"
+                    style={{ color: color.fg, backgroundColor: color.bg, borderColor: color.bd }}
+                  >
+                    {c.estado}
+                  </span>
+                  <Link href={`/verificar?codigo=${c.codigo}`} className="text-xs text-gray-500 hover:text-navy">
+                    Verificar
+                  </Link>
+                  <Link
+                    href={`/certificados/${c.id}`}
+                    className="px-3 py-1.5 text-xs font-semibold text-white rounded-sm bg-navy no-underline"
+                  >
+                    Ver detalle
+                  </Link>
+                </div>
               </div>
-            )}
-          </div>
+            );
+          })}
         </div>
-      </div>
+      )}
     </div>
   );
 }

@@ -8,5 +8,6 @@ import { OcrService } from './ocr.service';
 @Module({
   controllers: [CertificadosController],
   providers: [CertificadosService, SubidaCacheService, OcrService],
+  exports: [CertificadosService],
 })
 export class CertificadosModule {}

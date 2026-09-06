@@ -2,13 +2,26 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-const INSTITUCIONAL_PATHS = ['/dashboard', '/certificados'];
+// Áreas protegidas y su rol requerido.
+// '/dashboard' y '/certificados' son del portal institucional; '/admin' solo admin.
+const AREAS: Array<{ prefix: string; rol: string; home: string }> = [
+  { prefix: '/admin', rol: 'admin', home: '/admin/instituciones' },
+  { prefix: '/dashboard', rol: 'institucional', home: '/dashboard' },
+  { prefix: '/certificados', rol: 'institucional', home: '/dashboard' },
+];
+
+// El rol viaja en user.app_metadata (lo setea el backend al crear/editar
+// usuarios). El middleware NO consulta la tabla usuarios a cada request.
+function rolDeUsuario(user: { app_metadata?: Record<string, unknown> } | null): string | null {
+  const rol = user?.app_metadata?.rol;
+  return rol === 'admin' || rol === 'institucional' ? rol : null;
+}
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const esInstitucional = INSTITUCIONAL_PATHS.some((path) => pathname.startsWith(path));
+  const area = AREAS.find((a) => pathname.startsWith(a.prefix));
 
-  if (!esInstitucional) {
+  if (!area) {
     return NextResponse.next();
   }
 
@@ -31,8 +44,7 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // IMPORTANTE: usa getUser(), no getSession(), porque getUser()
-  // valida el token contra el servidor de Supabase (getSession() solo lee la cookie local).
+  // getUser() valida el token contra Supabase (no solo lee la cookie).
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
@@ -41,13 +53,22 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
+  const rol = rolDeUsuario(user);
+  if (rol !== area.rol) {
+    if (rol) {
+      // Autenticado pero con el área equivocada: va a su home según su rol.
+      const home = AREAS.find((a) => a.rol === rol)!.home;
+      return NextResponse.redirect(new URL(home, request.url));
+    }
+    // Autenticado sin rol conocido: se lo manda al home público.
+    return NextResponse.redirect(new URL('/', request.url));
+  }
+
   return response;
 }
 
 export const config = {
-  //matcher: ['/dashboard/:path*', '/certificados/:path*'],
-  //No sé exactamente por qué, pero si pongo /dashboard/:path* no funciona, 
-  // y si pongo /dashboard sin :path* sí funciona. 
-  // Tal vez sea un bug de Next.js 14.0.0-canary.12.
-  matcher: ['/verificar/:path*', '/certificados/:path*'],
+  // Se excluye '/verificar' de la protección por rol (es público); solo se
+  // protegen las áreas autenticadas.
+  matcher: ['/dashboard', '/dashboard/:path*', '/certificados', '/certificados/:path*', '/admin', '/admin/:path*'],
 };

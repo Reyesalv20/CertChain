@@ -38,7 +38,7 @@ export default function DashboardPage() {
           <p className="text-gray-500 text-sm">Resumen de certificados emitidos y estado del sistema.</p>
         </div>
         <Link
-          href="/certificados"
+          href="/certificados/emitir"
           className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white rounded-sm bg-navy"
         >
           <BlockchainIcon size={16} />
