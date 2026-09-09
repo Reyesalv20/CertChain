@@ -1,5 +1,5 @@
 // backend/src/certificados/certificados.service.ts
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { SupabaseService } from '../supabase/supabase.service';
 import { SubidaCacheService } from './subida-cache.service';
@@ -288,6 +288,52 @@ export class CertificadosService {
       },
       certificados,
     };
+  }
+
+  // Vincula una tarjeta (credencial física, por su UID) a un certificado que
+  // pertenece a la institución del usuario autenticado. A diferencia de
+  // /admin/certificados/:id/credenciales (solo rol admin), esta ruta la puede
+  // usar cualquier usuario de la institución dueña del certificado.
+  async vincularTarjetaPropia(certId: number, uid: string, institucionId: number) {
+    const limpio = uid?.trim();
+    if (!limpio) throw new BadRequestException('El UID de la tarjeta es obligatorio.');
+
+    const { data: certificado } = await this.supabase.client
+      .from('certificados')
+      .select('id_certificado, institucion_id')
+      .eq('id_certificado', certId)
+      .maybeSingle();
+    if (!certificado) throw new BadRequestException('Certificado no encontrado.');
+    if (certificado.institucion_id !== institucionId) {
+      throw new ForbiddenException('Ese certificado no pertenece a tu institución.');
+    }
+
+    const { data: existente } = await this.supabase.client
+      .from('credenciales_fisicas')
+      .select('id, uid_rfid, codigo')
+      .eq('uid_rfid', limpio)
+      .maybeSingle();
+
+    let credencial = existente;
+    if (!credencial) {
+      const { data: nueva, error } = await this.supabase.client
+        .from('credenciales_fisicas')
+        .insert({ uid_rfid: limpio, codigo: null, fecha_emision_fisica: new Date().toISOString() })
+        .select('id, uid_rfid, codigo')
+        .single();
+      if (error) throw new BadRequestException(`No se pudo registrar la tarjeta: ${error.message}`);
+      credencial = nueva;
+    }
+
+    const { error: vinculoError } = await this.supabase.client
+      .from('certificados_credenciales')
+      .insert({ credenciales_fisicas_id: credencial.id, certificados_id: certId });
+    // PK es certificados_id: si ya estaba vinculada, el insert choca (idempotente).
+    if (vinculoError && (vinculoError as any).code !== '23505') {
+      throw new BadRequestException(`No se pudo vincular la tarjeta: ${vinculoError.message}`);
+    }
+
+    return { ok: true, credencialId: credencial.id, uidRfid: credencial.uid_rfid };
   }
 
   async verificar(codigo: string) {

@@ -19,7 +19,9 @@ function destinoSegunRol(rol: string | null, redirect: string | null): string {
   const esAdmin = rol === 'admin';
   const areasPermitidas = esAdmin ? ['/admin'] : ['/dashboard', '/certificados'];
 
-  if (redirect && areasPermitidas.some((a) => redirect.startsWith(a))) {
+  // "/verificar" es pública para cualquier rol: se permite volver ahí (p. ej.
+  // tras escanear una tarjeta por Bluetooth y necesitar loguearse para vincularla).
+  if (redirect && (redirect.startsWith('/verificar') || areasPermitidas.some((a) => redirect.startsWith(a)))) {
     return redirect;
   }
   return esAdmin ? '/admin/instituciones' : '/dashboard';

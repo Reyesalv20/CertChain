@@ -7,6 +7,14 @@ import { api } from '@/lib/api';
 import { ShieldIcon } from './icons';
 
 // Navbar del portal institucional (grupo (institucional)): "/dashboard", "/certificados".
+//
+// Los links de navegación llevan contorno (píldora) para distinguirse
+// claramente del título "CertChain" — antes ambos eran texto plano y se
+// confundían entre sí.
+const pillBase = 'px-3.5 py-1.5 text-sm font-medium rounded-full border transition-colors no-underline';
+const pillInactivo = 'border-white/25 text-white/70 hover:text-white hover:border-white/50';
+const pillActivo = 'border-white/70 text-white bg-white/10';
+
 export function InstitucionalNavbar() {
   const pathname = usePathname();
   const router = useRouter();
@@ -25,10 +33,7 @@ export function InstitucionalNavbar() {
     }
   }
 
-  const linkClass = (path: string) =>
-    `text-sm font-medium transition-colors ${
-      pathname?.startsWith(path) ? 'text-white' : 'text-white/60 hover:text-white'
-    }`;
+  const pillClass = (path: string) => `${pillBase} ${pathname?.startsWith(path) ? pillActivo : pillInactivo}`;
 
   return (
     <nav className="sticky top-0 z-50 bg-navy border-b border-white/10">
@@ -41,19 +46,22 @@ export function InstitucionalNavbar() {
               Portal institucional
             </span>
           </Link>
-          <div className="hidden md:flex items-center gap-6">
-            <Link href="/dashboard" className={linkClass('/dashboard')}>
+          <div className="hidden md:flex items-center gap-3">
+            <Link href="/dashboard" className={pillClass('/dashboard')}>
               Panel
             </Link>
-            <Link href="/certificados" className={linkClass('/certificados')}>
+            <Link href="/certificados" className={pillClass('/certificados')}>
               Certificados
+            </Link>
+            <Link href="/verificar" className={pillClass('/verificar')}>
+              Escanear tarjeta
             </Link>
           </div>
         </div>
         <button
           onClick={handleLogout}
           disabled={cerrandoSesion}
-          className="text-white/60 hover:text-white text-sm transition-colors bg-transparent border-none cursor-pointer"
+          className={`${pillBase} ${pillInactivo} bg-transparent cursor-pointer hover:border-red-300/50`}
         >
           {cerrandoSesion ? 'Saliendo...' : 'Cerrar sesión'}
         </button>

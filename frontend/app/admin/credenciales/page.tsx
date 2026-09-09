@@ -8,8 +8,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api, ApiError } from '@/lib/api';
-import { useLectorRfid } from '@/hooks/useLectorRfid';
-import { RfidLectorStatus } from '@/components/RfidLectorStatus';
+import { useBluetoothRfid } from '@/hooks/useBluetoothRfid';
+import { BluetoothLectorStatus } from '@/components/BluetoothLectorStatus';
 import type { CredencialFisica } from '@/lib/types';
 
 function fechaCorta(iso: string | null) {
@@ -22,11 +22,17 @@ export default function AdminCredencialesPage() {
   const [error, setError] = useState('');
   const [ok, setOk] = useState('');
   const [busy, setBusy] = useState(false);
-  const [nueva, setNueva] = useState({ uidRfid: '', codigo: '', fechaEmisionFisica: '' });
+  const [nueva, setNueva] = useState({ uidRfid: '', fechaEmisionFisica: '' });
 
-  // El lector (modo vincular) prellena el UID de la credencial al escanear.
-  const { conectado: lectorConectado } = useLectorRfid({
-    activo: true,
+  // El lector por Bluetooth prellena el UID de la credencial al escanear.
+  const {
+    conectado: btConectado,
+    conectando: btConectando,
+    error: btError,
+    conectar: btConectar,
+    desconectar: btDesconectar,
+    soportado: btSoportado,
+  } = useBluetoothRfid({
     onUid: (uid) => setNueva((prev) => ({ ...prev, uidRfid: uid })),
   });
 
@@ -58,10 +64,9 @@ export default function AdminCredencialesPage() {
     try {
       await api.crearCredencial({
         uidRfid: uid,
-        codigo: nueva.codigo.trim() || undefined,
         fechaEmisionFisica: nueva.fechaEmisionFisica || undefined,
       });
-      setNueva({ uidRfid: '', codigo: '', fechaEmisionFisica: '' });
+      setNueva({ uidRfid: '', fechaEmisionFisica: '' });
       setOk('Credencial física registrada.');
       await cargar();
     } catch (e) {
@@ -90,9 +95,16 @@ export default function AdminCredencialesPage() {
       <section className="bg-white border border-gray-200 rounded-sm p-5 mb-6">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-semibold text-gray-700">Ingresar nueva credencial física</h2>
-          <RfidLectorStatus activo conectado={lectorConectado} />
+          <BluetoothLectorStatus
+            conectado={btConectado}
+            conectando={btConectando}
+            soportado={btSoportado}
+            error={btError}
+            onConectar={btConectar}
+            onDesconectar={btDesconectar}
+          />
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 mb-1">UID RFID *</label>
             <input
@@ -100,15 +112,6 @@ export default function AdminCredencialesPage() {
               onChange={(e) => setNueva({ ...nueva, uidRfid: e.target.value })}
               placeholder="UID de la credencial"
               className="w-full px-3 py-2 text-sm border border-gray-200 rounded-sm outline-none font-mono"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 mb-1">Código</label>
-            <input
-              value={nueva.codigo}
-              onChange={(e) => setNueva({ ...nueva, codigo: e.target.value })}
-              placeholder="Código impreso (opcional)"
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-sm outline-none"
             />
           </div>
           <div>

@@ -28,6 +28,8 @@ export default function EmitirCertificadoPage() {
   const [hash, setHash] = useState('');
   const [txHash, setTxHash] = useState('');
   const [error, setError] = useState('');
+  const [uidPendiente, setUidPendiente] = useState('');
+  const [tarjetaVinculada, setTarjetaVinculada] = useState(false);
   const [recientes, setRecientes] = useState<ActividadReciente[]>([]);
   const [cargandoRecientes, setCargandoRecientes] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -40,6 +42,13 @@ export default function EmitirCertificadoPage() {
       .catch(() => setRecientes([]))
       .finally(() => setCargandoRecientes(false));
   }, [paso === 'registrado']);
+
+  // Si venimos de /verificar tras escanear una tarjeta sin certificados
+  // (botón "Crear un certificado nuevo y vincularlo"), la URL trae ?uid=...
+  useEffect(() => {
+    const uid = new URLSearchParams(window.location.search).get('uid');
+    if (uid) setUidPendiente(uid);
+  }, []);
 
   async function handleFile(file: File | undefined) {
     if (!file) return;
@@ -73,7 +82,7 @@ async function handleRegister() {
       const tx = await registrarCertificado(hash);
       setTxHash(tx);
       // 2) Persistir metadata + hash en Supabase (backend /certificados/confirmar).
-      await api.confirmarCertificado({
+      const nuevoCertificado = await api.confirmarCertificado({
         subidaId: subida.subidaId,
         hash,
         txHash: tx,
@@ -82,6 +91,18 @@ async function handleRegister() {
         fechaEmision,
         archivoNombre: subida.archivoNombre,
       });
+
+      // 3) Si veníamos con una tarjeta RFID pendiente de vincular, la vinculamos
+      // a este certificado recién creado (no bloquea el registro si falla).
+      if (uidPendiente) {
+        try {
+          await api.vincularTarjetaPropia(nuevoCertificado.id, uidPendiente);
+          setTarjetaVinculada(true);
+        } catch {
+          setTarjetaVinculada(false);
+        }
+      }
+
       setPaso('registrado');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo registrar el certificado.');
@@ -126,6 +147,15 @@ async function handleRegister() {
           {error && (
             <div className="rounded-sm border border-red-200 bg-red-50 px-4 py-3 mb-5">
               <p className="text-red-700 text-xs">{error}</p>
+            </div>
+          )}
+
+          {uidPendiente && !isRegistered && (
+            <div className="rounded-sm border border-steel/30 bg-blue-50/60 px-4 py-3 mb-5">
+              <p className="text-xs text-steel">
+                Este certificado se vinculará automáticamente a la tarjeta{' '}
+                <span className="font-mono font-semibold">{uidPendiente}</span> al terminar de registrarlo.
+              </p>
             </div>
           )}
 
@@ -189,6 +219,13 @@ async function handleRegister() {
             <div className="rounded-sm border border-green-200 bg-green-50 p-5 mb-6">
               <p className="font-semibold text-green-800 text-sm">Certificado registrado en blockchain</p>
               <p className="text-green-700 text-xs mt-1">La transacción ha sido confirmada y es permanente.</p>
+              {uidPendiente && (
+                <p className="text-green-700 text-xs mt-1">
+                  {tarjetaVinculada
+                    ? `Tarjeta ${uidPendiente} vinculada a este certificado.`
+                    : `No se pudo vincular la tarjeta ${uidPendiente} automáticamente — puedes hacerlo desde /verificar.`}
+                </p>
+              )}
               <Link href="/certificados" className="text-xs text-steel hover:underline mt-2 inline-block">
                 Ver mis certificados →
               </Link>
