@@ -18,12 +18,12 @@ services:
       - MOCK_CERTIFICADOS=${MOCK_CERTIFICADOS:-true}
     volumes:
       - ./:/app
-    depends_on:
-      - ollama
     networks:
       - certchain-network
 
   ollama:
+    profiles:
+      - local
     image: ollama/ollama
     container_name: certchain-ollama
     ports:
