@@ -11,23 +11,31 @@ done
 echo "anvil listo ✓"
 
 # 1) Deploy del registry
+set +e
 OUT=$(forge create src/TrustedIssuersRegistry.sol:TrustedIssuersRegistry \
     --broadcast \
     --rpc-url http://anvil:8545 \
     --private-key "$ADMIN_KEY" 2>&1)
+STATUS=$?
+set -e
 echo "$OUT"
+[ $STATUS -eq 0 ] || { echo "ERROR: forge create (TrustedIssuersRegistry) fallo con exit $STATUS (ver salida arriba)" >&2; exit 1; }
 REGISTRY=$(echo "$OUT" | sed -n 's/Deployed to: \(0x[a-fA-F0-9]*\).*/\1/p')
-[ -n "$REGISTRY" ] || { echo "ERROR: no se pudo deployar el registry" >&2; exit 1; }
+[ -n "$REGISTRY" ] || { echo "ERROR: no se pudo extraer la direccion del registry" >&2; exit 1; }
 
 # 2) Desplegar el contrato. La salida completa se captura en $OUT
+set +e
 OUT=$(forge create src/CertificateRegistry.sol:AcademicCertificates \
   --broadcast \
   --rpc-url http://anvil:8545 \
   --private-key "$ADMIN_KEY" \
   --constructor-args "$REGISTRY" 2>&1)
+STATUS=$?
+set -e
 echo "$OUT"
+[ $STATUS -eq 0 ] || { echo "ERROR: forge create (CertificateRegistry) fallo con exit $STATUS (ver salida arriba)" >&2; exit 1; }
 CERTIFICATES=$(echo "$OUT" | sed -n 's/Deployed to: \(0x[a-fA-F0-9]*\).*/\1/p')
-[ -n "$CERTIFICATES" ] || { echo "ERROR: no se pudo deployar certificates" >&2; exit 1; }
+[ -n "$CERTIFICATES" ] || { echo "ERROR: no se pudo extraer la direccion de certificates" >&2; exit 1; }
 
 echo "Registry:     $REGISTRY"
 echo "Certificates: $CERTIFICATES"

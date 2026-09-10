@@ -11,7 +11,7 @@
 // "Acceso institucional".
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { ShieldIcon } from './icons';
 import { createClient } from '@/lib/supabase/client';
@@ -25,6 +25,11 @@ const pillInactivo = 'border-white/25 text-white/70 hover:text-white hover:borde
 
 export function PublicNavbar() {
   const router = useRouter();
+  const pathname = usePathname();
+  // En /login nunca se muestra "Cerrar sesión": si estás viendo el
+  // formulario de login es porque (para efectos de esta pantalla) no estás
+  // logueado, sin importar si quedó una sesión de Supabase colgada.
+  const enLogin = pathname === '/login';
   const [estado, setEstado] = useState<'cargando' | 'anonimo' | 'institucional' | 'admin'>('cargando');
   const [cerrandoSesion, setCerrandoSesion] = useState(false);
 
@@ -60,7 +65,8 @@ export function PublicNavbar() {
   async function handleLogout() {
     setCerrandoSesion(true);
     try {
-      await api.logout();
+      const supabase = createClient();
+      await supabase.auth.signOut();
     } catch {
       // igual mandamos a login
     } finally {
@@ -83,7 +89,7 @@ export function PublicNavbar() {
         </Link>
 
         <div className="flex items-center gap-3">
-          {estado === 'institucional' && (
+          {!enLogin && estado === 'institucional' && (
             <>
               <Link href="/dashboard" className={`${pillBase} ${pillInactivo}`}>
                 Volver al portal
@@ -97,7 +103,7 @@ export function PublicNavbar() {
               </button>
             </>
           )}
-          {estado === 'admin' && (
+          {!enLogin && estado === 'admin' && (
             <>
               <Link href="/admin/instituciones" className={`${pillBase} ${pillInactivo}`}>
                 Volver al panel
@@ -111,7 +117,7 @@ export function PublicNavbar() {
               </button>
             </>
           )}
-          {(estado === 'anonimo' || estado === 'cargando') && (
+          {!enLogin && (estado === 'anonimo' || estado === 'cargando') && (
             <Link href="/login" className={`${pillBase} ${pillInactivo}`} style={{ opacity: estado === 'cargando' ? 0 : 1 }}>
               Acceso institucional
             </Link>

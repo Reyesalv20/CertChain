@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { api } from '@/lib/api';
+import { createClient } from '@/lib/supabase/client';
 import { ShieldIcon } from './icons';
 
 // Navbar del portal institucional (grupo (institucional)): "/dashboard", "/certificados".
@@ -23,10 +23,11 @@ export function InstitucionalNavbar() {
   async function handleLogout() {
     setCerrandoSesion(true);
     try {
-      await api.logout();
+      const supabase = createClient();
+      await supabase.auth.signOut();
     } catch {
-      // Si el backend no responde igual mandamos al usuario a login;
-      // sin la cookie httpOnly el middleware lo detendrá de todos modos.
+      // Igual mandamos a login; si signOut falla el middleware seguirá
+      // protegiendo, pero preferimos no dejar al usuario atascado acá.
     } finally {
       router.push('/login');
       router.refresh();
