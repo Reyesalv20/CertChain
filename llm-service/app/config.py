@@ -6,7 +6,7 @@ import os
 # túnel sin tocar código, ponlo en el .env de la raíz:
 #   OLLAMA_URL=https://tu-tunel.trycloudflare.com
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama:11434")
-OLLAMA_TIMEOUT = float(os.getenv("OLLAMA_TIMEOUT", "60"))
+OLLAMA_TIMEOUT = float(os.getenv("OLLAMA_TIMEOUT", "120"))
 
 # Un modelo por endpoint (ver app/main.py: /chat/llama3 y /chat/mistral).
 MODEL_LLAMA3 = os.getenv("OLLAMA_MODEL_LLAMA3", "llama3")

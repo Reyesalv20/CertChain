@@ -77,6 +77,29 @@ def test_chat_sin_certificados_no_llama_a_ollama(monkeypatch):
     assert body["certificados_encontrados"] == 0
 
 
+def test_chat_contextual_landing_no_pide_certificado(monkeypatch):
+    async def fake_preguntar(model, prompt):
+        assert model == "mistral"
+        assert "landing" not in prompt.lower() or "orientación general" in prompt.lower()
+        assert "no hay certificado cargado" not in prompt.lower()
+        return "Puedes verificar tu tarjeta usando el código, el hash o el lector RFID."
+
+    monkeypatch.setattr(main, "preguntar", fake_preguntar)
+
+    response = client.post(
+        "/chat/mistral",
+        json={
+            "pagina": "landing",
+            "mensaje": "¿Cómo puedo verificar mi tarjeta?",
+            "contexto": {"estado": "idle"},
+            "instrucciones": ["Responde con orientación general."],
+        },
+    )
+
+    assert response.status_code == 200
+    assert "tarjeta" in response.json()["respuesta"].lower()
+
+
 def test_chat_devuelve_502_si_ollama_falla(monkeypatch):
     async def fake_certificados(uid_rfid):
         return [CERTIFICADO]

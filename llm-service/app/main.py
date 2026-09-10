@@ -92,6 +92,7 @@ async def chat_mistral(request: RfidChatRequest | ContextualChatRequest):
         getattr(request, "contexto", None),
         pregunta,
         getattr(request, "instrucciones", None),
+        getattr(request, "pagina", "verificacion"),
     )
     try:
         respuesta = await preguntar(config.MODEL_MISTRAL, prompt)

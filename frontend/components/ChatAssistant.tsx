@@ -32,7 +32,12 @@ export function ChatAssistant({
   ]);
   const [input, setInput] = useState('');
   const [typing, setTyping] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(defaultSuggestions.length > 0);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setShowSuggestions(defaultSuggestions.length > 0);
+  }, [defaultSuggestions]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -113,20 +118,44 @@ export function ChatAssistant({
       </div>
 
       {defaultSuggestions.length > 0 && (
-        <div className="px-4 py-3 border-t border-gray-100">
-          <div className="flex flex-wrap gap-2">
-            {defaultSuggestions.map((s) => (
+        <>
+          {showSuggestions ? (
+            <div className="px-4 py-3 border-t border-gray-100">
+              <div className="mb-2 flex items-center justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowSuggestions(false)}
+                  aria-label="Ocultar sugerencias"
+                  className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white text-xs text-gray-500 hover:bg-gray-100"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {defaultSuggestions.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => send(s)}
+                    className="px-2.5 py-1.5 text-[11px] rounded-full border border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100 transition-colors"
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="px-4 py-3 border-t border-gray-100">
               <button
-                key={s}
                 type="button"
-                onClick={() => send(s)}
-                className="px-2.5 py-1.5 text-[11px] rounded-full border border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100 transition-colors"
+                onClick={() => setShowSuggestions(true)}
+                className="text-[11px] font-medium text-gray-600 hover:text-gray-900 underline-offset-2 hover:underline"
               >
-                {s}
+                Ver sugerencias
               </button>
-            ))}
-          </div>
-        </div>
+            </div>
+          )}
+        </>
       )}
 
       <div className="px-4 py-3 border-t border-gray-100 flex gap-2">
