@@ -41,3 +41,25 @@ def construir_prompt(certificados: Iterable[dict], pregunta: str) -> str:
         _formatear_certificado(i, cert) for i, cert in enumerate(certificados, start=1)
     )
     return f"{SYSTEM_INSTRUCTIONS}\n\n{bloques}\n\nPregunta del usuario:\n{pregunta}"
+
+
+def construir_prompt_contextual(contexto: dict | None, pregunta: str, instrucciones: list[str] | None = None) -> str:
+    """Construye un prompt para chat contextual sin volver a buscar certificados.
+    El backend ya resolvió el contexto real y solo le pasa a la IA la explicación
+    del estado actual y los datos disponibles."""
+    lineas = [
+        "Eres un asistente de CertChain. Responde SOLO con la información verificada que te entregan en este contexto.",
+        "No inventes certificados, estudiantes, carreras, instituciones ni fechas.",
+        "Si no hay un certificado cargado, indica que el usuario debe buscar primero un certificado.",
+        "Si el documento está revocado o no existe, dilo claramente.",
+    ]
+
+    if instrucciones:
+        lineas.extend(instrucciones)
+
+    if contexto:
+        lineas.append("Contexto actual:")
+        lineas.append(str(contexto))
+
+    lineas.append(f"Pregunta del usuario:\n{pregunta}")
+    return "\n\n".join(lineas)

@@ -14,6 +14,7 @@ import { CheckIcon, ShieldIcon, XIcon } from '@/components/icons';
 import { ChatAssistant } from '@/components/ChatAssistant';
 import { BluetoothLectorStatus } from '@/components/BluetoothLectorStatus';
 import { VincularTarjetaPanel } from '@/components/VincularTarjetaPanel';
+import { FloatingChat } from '@/components/FloatingChat';
 import { useBluetoothRfid } from '@/hooks/useBluetoothRfid';
 import { api } from '@/lib/api';
 import { verificarCertificado, type ResultadoVerificacionHash } from '@/lib/blockchain';
@@ -579,6 +580,8 @@ export default function VerificarPage() {
           />
         </div>
       )}
+
+      <FloatingChat pageMode="verificacion" />
     </div>
   );
 }

@@ -4,8 +4,8 @@ from fastapi import FastAPI, HTTPException
 from . import config
 from .certificados_client import CertificadosServiceError, get_certificados_por_rfid
 from .ollama_client import OllamaError, preguntar
-from .prompt import NO_CERTIFICADOS_RESPUESTA, construir_prompt
-from .schemas import ChatRequest, ChatResponse, RfidChatRequest
+from .prompt import NO_CERTIFICADOS_RESPUESTA, construir_prompt, construir_prompt_contextual
+from .schemas import ChatRequest, ChatResponse, ContextualChatRequest, RfidChatRequest
 
 app = FastAPI(title="CertChain LLM Service")
 
@@ -80,5 +80,26 @@ async def chat_llama3(request: RfidChatRequest):
 
 
 @app.post("/chat/mistral", response_model=ChatResponse)
-async def chat_mistral(request: RfidChatRequest):
-    return await _responder_con_contexto_rfid(request, config.MODEL_MISTRAL)
+async def chat_mistral(request: RfidChatRequest | ContextualChatRequest):
+    if hasattr(request, "uid_rfid") and getattr(request, "uid_rfid", None):
+        return await _responder_con_contexto_rfid(request, config.MODEL_MISTRAL)
+
+    pregunta = (getattr(request, "mensaje", None) or getattr(request, "pregunta", None) or "").strip()
+    if not pregunta:
+        raise HTTPException(status_code=400, detail="Debe enviar un mensaje o una pregunta.")
+
+    prompt = construir_prompt_contextual(
+        getattr(request, "contexto", None),
+        pregunta,
+        getattr(request, "instrucciones", None),
+    )
+    try:
+        respuesta = await preguntar(config.MODEL_MISTRAL, prompt)
+    except OllamaError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return ChatResponse(
+        respuesta=respuesta,
+        modelo=config.MODEL_MISTRAL,
+        certificados_encontrados=0,
+    )

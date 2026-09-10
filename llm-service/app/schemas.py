@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
@@ -8,6 +8,20 @@ class ChatRequest(BaseModel):
     frontend/API_CONTRACT.md). No lo cambies sin avisar al equipo."""
 
     pregunta: str
+
+
+class ContextualChatRequest(BaseModel):
+    """Contrato para el chat guiado por contexto ya resuelto por el backend.
+    Permite una conversación sobre la landing o sobre una verificación ya hecha.
+    """
+
+    mensaje: Optional[str] = None
+    pregunta: Optional[str] = None
+    pagina: str = "verificacion"
+    contexto: Optional[dict[str, Any]] = None
+    historial: Optional[list[dict[str, Any]]] = None
+    instrucciones: Optional[list[str]] = None
+    uid_rfid: Optional[str] = None
 
 
 class RfidChatRequest(BaseModel):
