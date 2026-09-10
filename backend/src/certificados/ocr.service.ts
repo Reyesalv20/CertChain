@@ -1,12 +1,30 @@
+// backend/src/certificados/ocr.service.ts
 import { Injectable, Logger } from '@nestjs/common';
-import { createWorker } from 'tesseract.js';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
-import { createCanvas } from '@napi-rs/canvas';
 
 export interface DatosExtraidos {
   nombreEstudiante: string;
   carrera: string;
-  fechaEmision: string; // formato YYYY-MM-DD, o '' si no se detectó
+  fechaEmision: string;
+}
+
+interface LineasConCoordenadas {
+  texto: string;
+  x0: number;
+  top: number;
+  x1: number;
+  bottom: number;
+  region: 'TOP' | 'MIDDLE' | 'BOTTOM';
+  posicionVertical: number;
+}
+
+interface ConfiguracionOCR {
+  nombreRegion: 'TOP' | 'MIDDLE' | 'BOTTOM';
+  carreraRegion: 'TOP' | 'MIDDLE' | 'BOTTOM';
+  fechaRegion: 'TOP' | 'MIDDLE' | 'BOTTOM';
+  nombreRegex: RegExp;
+  carreraRegex: RegExp;
+  fechaRegex: RegExp;
 }
 
 const MESES: Record<string, string> = {
@@ -24,118 +42,227 @@ const MESES: Record<string, string> = {
   dec: '12', dic: '12',
 };
 
+// CONFIGURACIONES POR INSTITUCIÓN (todo hardcodeado)
+const CONFIGURACIONES_POR_INSTITUCION: Record<number, ConfiguracionOCR> = {
+  // Cisco
+  /*3: {
+    nombreRegion: 'MIDDLE',
+    carreraRegion: 'MIDDLE',
+    fechaRegion: 'BOTTOM',
+    nombreRegex: /^(([A-ZÁÉÍÓÚÑ]){4,80}([\s])){4}$/,
+    carreraRegex: /^([A-ZÁÉÍÓÚÑa-záéíóúñ\s:]{4,80})$/,
+    fechaRegex: /([0-9]){2}\s([A-Za-z]{1,3})\s([0-9]){4}/,
+  },*/
+  // Cisco Academy (institución 3)
+3: {
+  nombreRegion: 'TOP',
+  carreraRegion: 'MIDDLE',
+  fechaRegion: 'BOTTOM',
+  // Nombre: captura cualquier línea en TOP que sea solo letras y espacios (mayúsculas)
+  nombreRegex: /^([A-ZÁÉÍÓÚÑ\s]+)$/,
+  // Carrera: captura línea que contenga "CCNA" o similar (con números, dos puntos, letras)
+  carreraRegex: /^([A-Z0-9Á-Ú:a-záéíóúñ\s]+)$/,
+  // Fecha: "18 Aug 2026" formato específico
+  fechaRegex: /(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})/,
+},
+  
+  // UNITEC (Cisco Academy)
+  1: {
+    nombreRegion: 'TOP',
+    carreraRegion: 'MIDDLE',
+    fechaRegion: 'BOTTOM',
+    nombreRegex: /^([A-ZÁÉÍÓÚÑ][A-Za-záéíóúñ\s]{4,80})$/,
+    carreraRegex: /(?:completó\s+(?:con\s+éxito\s+)?)?([A-ZÁÉÍÓÚÑa-záéíóúñ\s:]+)/,
+    fechaRegex: /(\d{1,2})\s+([A-Za-z]{3,10})\s+(\d{4})/,
+  },
+
+  // Universidad Nacional Autónoma
+  2: {
+    nombreRegion: 'TOP',
+    carreraRegion: 'MIDDLE',
+    fechaRegion: 'BOTTOM',
+    nombreRegex: /^([A-ZÁÉÍÓÚÑ][A-Za-záéíóúñ\s]{4,80})$/,
+    carreraRegex: /(?:Carrera|Programa)[:\s]+([A-ZÁÉÍÓÚÑa-záéíóúñ\s:]+)/i,
+    fechaRegex: /(\d{1,2})\s+de\s+([A-Za-z]+)\s+de\s+(\d{4})/,
+  },
+
+  // Instituto Tecnológico Superior
+  4: {
+    nombreRegion: 'TOP',
+    carreraRegion: 'MIDDLE',
+    fechaRegion: 'BOTTOM',
+    nombreRegex: /^([A-ZÁÉÍÓÚÑ][A-Za-záéíóúñ\s]{4,80})$/,
+    carreraRegex: /(?:Carrera|Programa)[:\s]+([A-ZÁÉÍÓÚÑa-záéíóúñ\s:]+)/i,
+    fechaRegex: /(\d{1,2})\s+de\s+([A-Za-z]+)\s+de\s+(\d{4})/,
+  },
+
+  // Universidad Católica del Norte
+  5: {
+    nombreRegion: 'TOP',
+    carreraRegion: 'MIDDLE',
+    fechaRegion: 'BOTTOM',
+    nombreRegex: /^([A-ZÁÉÍÓÚÑ][A-Za-záéíóúñ\s]{4,80})$/,
+    carreraRegex: /(?:Carrera|Programa)[:\s]+([A-ZÁÉÍÓÚÑa-záéíóúñ\s:]+)/i,
+    fechaRegex: /(\d{1,2})\s+de\s+([A-Za-z]+)\s+de\s+(\d{4})/,
+  },
+};
+
 @Injectable()
 export class OcrService {
   private readonly logger = new Logger(OcrService.name);
 
-  async extraerTexto(pdfBuffer: Buffer): Promise<string> {
-    const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(pdfBuffer) });
-    const pdf = await loadingTask.promise;
+  /**
+   * Obtiene la configuración OCR para una institución.
+   * Si no existe, devuelve la configuración por defecto (Arizona State University).
+   */
+  private obtenerConfiguracion(institucionId: number): ConfiguracionOCR {
+    return CONFIGURACIONES_POR_INSTITUCION[institucionId] || CONFIGURACIONES_POR_INSTITUCION[4];
+  }
 
-    let textoCompleto = '';
-    const totalPaginas = Math.min(pdf.numPages, 2);
+  /**
+   * Extrae texto directamente del PDF con coordenadas.
+   */
+async extraerTextoConCoordenadas(pdfBuffer: Buffer): Promise<LineasConCoordenadas[]> {
+  const fs = require('fs');
+  const path = require('path');
+  const { execSync } = require('child_process');
+  const os = require('os');
 
-    const worker = await createWorker('spa+eng'); // certificados a veces vienen en inglés (ej. Coursera)
+  const tmpPdfPath = path.join(os.tmpdir(), `temp_${Date.now()}.pdf`);
+  const tmpOutputPath = path.join(os.tmpdir(), `output_${Date.now()}.json`);
+
+  try {
+    fs.writeFileSync(tmpPdfPath, pdfBuffer);
+
+    const scriptPath = path.join(__dirname, '../../extract_pdf_coordinates.py');
+    const comando = `python3 "${scriptPath}" "${tmpPdfPath}" --json-output "${tmpOutputPath}"`;
+    
     try {
-      for (let i = 1; i <= totalPaginas; i++) {
-        const page = await pdf.getPage(i);
-        const viewport = page.getViewport({ scale: 2.0 });
-
-        const canvas = createCanvas(viewport.width, viewport.height);
-
-        await page.render({
-          canvas: canvas as any,
-          viewport: viewport as any,
-        }).promise;
-
-        const imagenBuffer = canvas.toBuffer('image/png');
-        const { data } = await worker.recognize(imagenBuffer);
-        textoCompleto += data.text + '\n';
-      }
-    } finally {
-      await worker.terminate();
+      execSync(comando, { stdio: 'pipe', encoding: 'utf-8' });
+    } catch (e: any) {
+      this.logger.error(`Error ejecutando Python: ${e.message}`);
+      throw new Error('No se pudo procesar el PDF con el script Python');
     }
 
-    this.logger.debug(`Texto OCR extraído:\n${textoCompleto}`);
-    return textoCompleto;
-  }
+    // Lee y parsea el JSON
+    const output = fs.readFileSync(tmpOutputPath, 'utf-8');
+    const lineas: LineasConCoordenadas[] = JSON.parse(output);
 
-  parsearCampos(texto: string): DatosExtraidos {
-    const lineas = texto
-      .split('\n')
-      .map((l) => l.trim())
-      .filter((l) => l.length > 0);
-
-    const fechaEmision = this.extraerFecha(lineas);
-    const indiceFecha = this.indiceDeLineaConFecha(lineas);
-    const indiceCompletado = lineas.findIndex((l) =>
-      /has\s+successfully\s+completed|completó\s+satisfactoriamente|certifica\s+que/i.test(l),
+    this.logger.debug(
+      `Extracción con Python (${lineas.length} líneas):\n${lineas
+        .map((l) => `${l.region} (${l.posicionVertical}%): "${l.texto}"`)
+        .join('\n')}`,
     );
 
-    const nombreEstudiante = this.extraerNombre(lineas, indiceFecha, indiceCompletado);
-    const carrera = this.extraerCarrera(lineas, indiceCompletado);
+    return lineas;
+  } finally {
+    if (fs.existsSync(tmpPdfPath)) fs.unlinkSync(tmpPdfPath);
+    if (fs.existsSync(tmpOutputPath)) fs.unlinkSync(tmpOutputPath);
+  }
+}
 
-    return { nombreEstudiante, carrera, fechaEmision };
+/**
+ * Busca una línea que contenga un patrón y devuelve la SIGUIENTE línea.
+ * Útil para campos que vienen después de una línea clave.
+ */
+private extraerProximaLineaAfter(
+  lineas: LineasConCoordenadas[],
+  region: string,
+  patronBuscar: RegExp,
+): string {
+  const lineasEnRegion = lineas.filter((l) => l.region === region);
+
+  for (let i = 0; i < lineasEnRegion.length - 1; i++) {
+    if (patronBuscar.test(lineasEnRegion[i].texto)) {
+      // Encontró la línea con el patrón, devuelve la siguiente
+      return lineasEnRegion[i + 1].texto.trim();
+    }
   }
 
-  private indiceDeLineaConFecha(lineas: string[]): number {
-    const regex = /([A-Za-zÁÉÍÓÚñ]{3,10})\.?\s*(\d{1,2}),?\s+(\d{4})/;
-    return lineas.findIndex((l) => regex.test(l));
-  }
+  return '';
+}
 
-  private extraerFecha(lineas: string[]): string {
-    // Formato "Mes Día, Año" (ej. "Dec 9, 2023") — tolera espacios extra por OCR ruidoso.
-    const regexTexto = /([A-Za-zÁÉÍÓÚñ]{3,10})\.?\s*(\d{1,2}),?\s+(\d{4})/;
-    // Formato numérico como respaldo: 09/12/2023 o 2023-12-09
-    const regexNumerica = /(\d{4})-(\d{1,2})-(\d{1,2})|(\d{1,2})\/(\d{1,2})\/(\d{4})/;
+  /**
+   * Parsea campos usando coordenadas y regiones.
+   * Este es el método principal usado por el servicio de certificados.
+   */
 
-    for (const linea of lineas) {
-      const m = linea.match(regexTexto);
+async parsearCamposConRegiones(
+  pdfBuffer: Buffer,
+  institucionId: number,
+): Promise<DatosExtraidos> {
+  const config = this.obtenerConfiguracion(institucionId);
+  const lineas = await this.extraerTextoConCoordenadas(pdfBuffer);
+
+  // Nombre: busca en región TOP con regex
+  const nombreEstudiante = this.extraerPorRegion(lineas, config.nombreRegion, config.nombreRegex);
+  
+  // Carrera: busca la línea que viene DESPUÉS de "por completar"
+  const patronCompletado = /por\s+completar/i;
+  const carrera = this.extraerProximaLineaAfter(lineas, config.carreraRegion, patronCompletado);
+  
+  // Fecha: busca en región BOTTOM con regex
+  const fechaEmision = this.extraerFechaEnRegion(lineas, config.fechaRegion, config.fechaRegex);
+
+  this.logger.debug(
+    `Campos extraídos (institución ${institucionId}): nombre="${nombreEstudiante}", carrera="${carrera}", fecha="${fechaEmision}"`,
+  );
+
+  return { nombreEstudiante, carrera, fechaEmision };
+}
+  /**
+   * Busca una línea en una región específica y extrae con regex.
+   */
+  private extraerPorRegion(
+    lineas: LineasConCoordenadas[],
+    region: string,
+    regex: RegExp,
+  ): string {
+    const lineasEnRegion = lineas.filter((l) => l.region === region);
+
+    for (const linea of lineasEnRegion) {
+      const m = linea.texto.match(regex);
       if (m) {
-        const mesTexto = m[1].toLowerCase().replace(/\s/g, '').slice(0, 3);
-        const mesNum = MESES[mesTexto];
-        if (mesNum) {
-          const dia = m[2].padStart(2, '0');
-          return `${m[3]}-${mesNum}-${dia}`;
+        return (m[1] || linea.texto).trim();
+      }
+    }
+
+    return '';
+  }
+
+  /**
+   * Extrae fecha en una región específica, formateando según el patrón detectado.
+   */
+  private extraerFechaEnRegion(
+    lineas: LineasConCoordenadas[],
+    region: string,
+    regex: RegExp,
+  ): string {
+    const lineasEnRegion = lineas.filter((l) => l.region === region);
+
+    for (const linea of lineasEnRegion) {
+      const m = linea.texto.match(regex);
+      if (m) {
+        // Intenta formatear como "Dec 9, 2023" (grupo 1 es mes, grupo 2 es día, grupo 3 es año)
+        if (m[1] && m[2] && m[3]) {
+          const mesTexto = m[1].toLowerCase().replace(/\s/g, '').slice(0, 3);
+          const mesNum = MESES[mesTexto];
+          if (mesNum) {
+            return `${m[3]}-${mesNum}-${m[2].padStart(2, '0')}`;
+          }
+        }
+
+        // Intenta formatear como "18 de agosto de 2026" (grupo 1 es día, grupo 2 es mes, grupo 3 es año)
+        if (m[1] && m[2] && m[3]) {
+          const mesTexto = m[2].toLowerCase().slice(0, 3);
+          const mesNum = MESES[mesTexto];
+          if (mesNum) {
+            return `${m[3]}-${mesNum}-${m[1].padStart(2, '0')}`;
+          }
         }
       }
     }
 
-    for (const linea of lineas) {
-      const m = linea.match(regexNumerica);
-      if (m) {
-        if (m[1]) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
-        if (m[6]) return `${m[6]}-${m[5].padStart(2, '0')}-${m[4].padStart(2, '0')}`;
-      }
-    }
-
-    return '';
-  }
-
-  private extraerNombre(lineas: string[], indiceFecha: number, indiceCompletado: number): string {
-    if (indiceFecha < 0) return '';
-
-    for (let i = indiceFecha + 1; i < lineas.length; i++) {
-      if (i === indiceCompletado) continue;
-      if (/has\s+successfully\s+completed/i.test(lineas[i])) continue;
-      // Evita capturar líneas que claramente no son un nombre de persona
-      if (lineas[i].length > 60) continue;
-      return lineas[i];
-    }
-    return '';
-  }
-
-  private extraerCarrera(lineas: string[], indiceCompletado: number): string {
-    if (indiceCompletado < 0) return '';
-
-    for (let i = indiceCompletado + 1; i < lineas.length; i++) {
-      const linea = lineas[i];
-      if (!linea) continue;
-      // Salta la línea descriptiva larga tipo "an online non-credit course authorized by..."
-      if (/^an?\s.*course/i.test(linea)) continue;
-      if (/authorized by|offered through/i.test(linea)) continue;
-      return linea;
-    }
     return '';
   }
 }
