@@ -289,12 +289,28 @@ export const api = {
   },
 
   // POST /chat (público)
-  // Body: { pregunta, codigoCertificado }
-  // El backend reenvía la pregunta a llm-service (RAG sobre el certificado indicado).
-  preguntarAsistente(pregunta: string, codigoCertificado: string): Promise<{ respuesta: string }> {
+  // El backend recibe el contexto real ya resuelto por la UI y lo reenvía al llm-service.
+  preguntarAsistente(
+    pregunta: string,
+    codigoCertificado: string,
+    contexto?: Record<string, unknown>,
+    pagina: 'landing' | 'verificacion' = 'verificacion',
+  ): Promise<{ respuesta: string; modelo?: string; estado?: string }> {
     return apiFetch('/chat', {
       method: 'POST',
-      body: JSON.stringify({ pregunta, codigoCertificado }),
+      body: JSON.stringify({
+        mensaje: pregunta,
+        pregunta,
+        codigoCertificado,
+        pagina,
+        contexto: contexto ?? {
+          modo: codigoCertificado ? 'codigo' : null,
+          query: codigoCertificado || null,
+          estado: codigoCertificado ? 'unknown' : 'idle',
+          certificado: codigoCertificado ? { codigo: codigoCertificado } : null,
+        },
+        historial: [],
+      }),
     });
   },
 };

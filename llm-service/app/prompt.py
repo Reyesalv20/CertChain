@@ -1,11 +1,14 @@
 from typing import Iterable
 
 SYSTEM_INSTRUCTIONS = (
-    "Eres un asistente que responde preguntas sobre certificados académicos "
-    "verificados en CertChain. Responde ÚNICAMENTE en base a la información de "
-    "los certificados listados a continuación. No inventes datos ni asumas "
-    "información que no esté presente. Si no sabes algo o no estás seguro, "
-    "dilo claramente en vez de adivinar. Sé breve, preciso y conciso."
+    "Eres un asistente de CertChain."
+"Responde solo con la información verificada del contexto."
+"No inventes nombres, fechas, carreras, instituciones o estados."
+"Si no hay datos suficientes, pide una sola aclaración."
+"Mantén la respuesta en 1 a 3 frases."
+"Si el certificado es válido, dilo claramente."
+"Si está revocado o inválido, explica el motivo con precisión."
+"Si es una página de landing, responde orientación general y no hables de certificados faltantes."
 )
 
 NO_CERTIFICADOS_RESPUESTA = (
@@ -41,3 +44,37 @@ def construir_prompt(certificados: Iterable[dict], pregunta: str) -> str:
         _formatear_certificado(i, cert) for i, cert in enumerate(certificados, start=1)
     )
     return f"{SYSTEM_INSTRUCTIONS}\n\n{bloques}\n\nPregunta del usuario:\n{pregunta}"
+
+
+def construir_prompt_contextual(
+    contexto: dict | None,
+    pregunta: str,
+    instrucciones: list[str] | None = None,
+    pagina: str = "verificacion",
+) -> str:
+    """Construye un prompt compacto y consistente para respuestas breves.
+    El backend ya resolvió el contexto real y solo le pasa información útil al modelo."""
+    lineas = [
+        "Eres un asistente de CertChain.",
+        "Responde solo con la información verificada del contexto.",
+        "No inventes nombres, fechas, carreras, instituciones ni estados.",
+        "Mantén la respuesta en 1 a 3 frases.",
+        "Si no hay suficiente información, pide solo una aclaración.",
+    ]
+
+    if pagina == "landing":
+        lineas.append(
+            "Esta es una conversación de landing: responde orientación general y no hables de certificados faltantes."
+        )
+    else:
+        lineas.append("Si el documento está revocado o no existe, dilo claramente.")
+
+    if instrucciones:
+        lineas.extend(instrucciones)
+
+    if contexto:
+        lineas.append("Contexto actual:")
+        lineas.append(str(contexto))
+
+    lineas.append(f"Pregunta del usuario:\n{pregunta}")
+    return "\n\n".join(lineas)

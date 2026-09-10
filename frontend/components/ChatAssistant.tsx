@@ -7,32 +7,75 @@ import { SendIcon } from './icons';
 
 // Asistente de preguntas sobre un certificado ya verificado.
 // Llama a POST /chat en el backend, que a su vez debe reenviar la pregunta
-// a llm-service (RAG). Ver frontend/API_CONTRACT.md.
-export function ChatAssistant({ certFound, codigoCertificado }: { certFound: boolean; codigoCertificado: string }) {
+// a llm-service con el contexto ya resuelto.
+export function ChatAssistant({
+  certFound,
+  codigoCertificado,
+  pageMode = 'verificacion',
+  defaultSuggestions = [],
+  contexto,
+}: {
+  certFound: boolean;
+  codigoCertificado: string;
+  pageMode?: 'landing' | 'verificacion';
+  defaultSuggestions?: string[];
+  contexto?: Record<string, unknown>;
+}) {
   const [messages, setMessages] = useState<MensajeChat[]>([
     {
       rol: 'bot',
-      texto: certFound
-        ? 'Hola, soy el asistente de CertChain. Puedo responder tus preguntas sobre este certificado verificado. ¿En qué te puedo ayudar?'
-        : 'No encontré un certificado registrado. Verifica que el código sea correcto o prueba escaneando la tarjeta física.',
+      texto:
+        pageMode === 'landing'
+          ? 'Hola, soy el asistente de CertChain. Puedo orientarte sobre cómo verificar un certificado, usar tu tarjeta RFID o entender la tecnología blockchain.'
+          : certFound
+            ? 'Hola, soy el asistente de CertChain. Puedo responder tus preguntas sobre este certificado verificado. ¿En qué te puedo ayudar?'
+            : 'No encontré un certificado registrado. Verifica que el código sea correcto o prueba escaneando la tarjeta física.',
     },
   ]);
   const [input, setInput] = useState('');
   const [typing, setTyping] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(defaultSuggestions.length > 0);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setShowSuggestions(defaultSuggestions.length > 0);
+  }, [defaultSuggestions]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, typing]);
 
-  async function send() {
-    const text = input.trim();
+  async function send(texto?: string) {
+    const text = (texto ?? input).trim();
     if (!text || typing) return;
     setMessages((m) => [...m, { rol: 'usuario', texto: text }]);
     setInput('');
     setTyping(true);
     try {
-      const { respuesta } = await api.preguntarAsistente(text, codigoCertificado);
+      const contextoFinal = contexto ?? (pageMode === 'landing'
+        ? {
+            modo: null,
+            query: null,
+            estado: 'idle',
+            certificado: null,
+          }
+        : certFound
+          ? {
+              modo: 'codigo',
+              query: codigoCertificado,
+              estado: 'valid',
+              certificado: {
+                codigo: codigoCertificado,
+              },
+            }
+          : {
+              modo: 'codigo',
+              query: codigoCertificado || null,
+              estado: 'invalid',
+              certificado: null,
+            });
+
+      const { respuesta } = await api.preguntarAsistente(text, codigoCertificado, contextoFinal, pageMode);
       setMessages((m) => [...m, { rol: 'bot', texto: respuesta }]);
     } catch (err) {
       const mensaje =
@@ -76,25 +119,78 @@ export function ChatAssistant({ certFound, codigoCertificado }: { certFound: boo
         <div ref={bottomRef} />
       </div>
 
-      {certFound && (
-        <div className="px-4 py-3 border-t border-gray-100 flex gap-2">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && send()}
-            placeholder="¿Cuándo se emitió? ¿Quién es el titular?..."
-            className="flex-1 text-sm px-3 py-2 border border-gray-200 rounded-sm outline-none"
-          />
-          <button
-            onClick={send}
-            className="px-3 py-2 rounded-sm text-white flex items-center justify-center bg-steel border-none cursor-pointer"
-            style={{ minWidth: 40 }}
+      {defaultSuggestions.length > 0 && (
+        <div className="border-t border-gray-100">
+          <div
+            className={`overflow-hidden transition-all duration-300 ease-out ${
+              showSuggestions ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'
+            }`}
           >
-            <SendIcon size={14} />
-          </button>
+            <div className="px-4 py-3">
+              <div className="mb-2 flex items-center justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowSuggestions(false)}
+                  aria-label="Ocultar sugerencias"
+                  className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white text-xs text-gray-500 hover:bg-gray-100 transition-colors"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {defaultSuggestions.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => send(s)}
+                    className="px-2.5 py-1.5 text-[11px] rounded-full border border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100 transition-colors"
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div
+            className={`overflow-hidden transition-all duration-300 ease-out ${
+              showSuggestions ? 'max-h-0 opacity-0' : 'max-h-10 opacity-100'
+            }`}
+          >
+            <div className="px-4 py-3">
+              <button
+                type="button"
+                onClick={() => setShowSuggestions(true)}
+                className="text-[11px] font-medium text-gray-600 hover:text-gray-900 underline-offset-2 hover:underline transition-all"
+              >
+                Ver sugerencias
+              </button>
+            </div>
+          </div>
         </div>
       )}
+
+      <div className="px-4 py-3 border-t border-gray-100 flex gap-2">
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && send()}
+          placeholder={
+            pageMode === 'landing'
+              ? 'Pregúntale al asistente sobre verificación...'
+              : '¿Cuándo se emitió? ¿Quién es el titular?...'
+          }
+          className="flex-1 text-sm px-3 py-2 border border-gray-200 rounded-sm outline-none"
+        />
+        <button
+          onClick={() => send()}
+          className="px-3 py-2 rounded-sm text-white flex items-center justify-center bg-steel border-none cursor-pointer"
+          style={{ minWidth: 40 }}
+        >
+          <SendIcon size={14} />
+        </button>
+      </div>
     </div>
   );
 }

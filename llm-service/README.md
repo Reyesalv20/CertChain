@@ -5,8 +5,11 @@ Asistente con RAG (Retrieval-Augmented Generation) sobre la base de conocimiento
 ## Cómo levantarlo
 
 ```bash
-# Levanta llm-service + ollama (su única dependencia)
+# Con tunnel de Cloudflare u otro servidor remoto de Ollama
 docker compose up llm-service
+
+# Solo si Ollama corre localmente en Docker
+docker compose --profile local up llm-service ollama
 ```
 
 Acceso:
