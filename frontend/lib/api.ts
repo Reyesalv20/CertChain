@@ -14,11 +14,9 @@ import type {
   Certificado,
   CredencialFisica,
   CredencialVinculada,
-  CredencialesLogin,
   DatosConfirmacionCertificado,
   DetalleInstitucion,
   EstadisticasDashboard,
-  Institucion,
   InstitucionAdmin,
   MetadataCertificado,
   ResultadoTarjeta,
@@ -85,21 +83,13 @@ export const api = {
     return apiFetch('/auth/me');
   },
 
-  // POST /auth/login
-  // Body: { email, password }
-  // El backend valida credenciales y responde con Set-Cookie: certchain_token (httpOnly).
-  login(credenciales: CredencialesLogin): Promise<{ institucion: Institucion }> {
-    return apiFetch('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify(credenciales),
-    });
-  },
-
-  // POST /auth/logout — limpia la cookie certchain_token en el backend.
-  logout(): Promise<void> {
-    return apiFetch('/auth/logout', { method: 'POST' });
-  },
-
+  // NOTA: no hay POST /auth/login ni /auth/logout en el backend (nunca
+  // existieron pese al comentario viejo sobre una cookie "certchain_token").
+  // La sesión real es 100% de Supabase: login = supabase.auth.signInWithPassword
+  // (ver app/(publico)/login/page.tsx) y logout = supabase.auth.signOut()
+  // (ver los navbars). Si en algún momento se necesita lógica extra de logout
+  // en el backend (invalidar algo server-side), agregarla acá Y llamarla desde
+  // los navbars además de signOut() — nunca en su lugar.
 
   // POST /certificados/subir (protegido)
   // multipart/form-data con el campo "archivo" (PDF).

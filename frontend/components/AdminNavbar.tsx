@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { api } from '@/lib/api';
+import { createClient } from '@/lib/supabase/client';
 import { ShieldIcon } from './icons';
 
 // Navbar del área administrativa: "/admin/*".
@@ -23,7 +23,8 @@ export function AdminNavbar() {
   async function handleLogout() {
     setCerrandoSesion(true);
     try {
-      await api.logout();
+      const supabase = createClient();
+      await supabase.auth.signOut();
     } catch {
       // igual mandamos a login
     } finally {

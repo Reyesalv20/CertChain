@@ -3,6 +3,10 @@
 # ============================================================
 FROM ghcr.io/foundry-rs/foundry:stable AS build
 WORKDIR /app
+# La imagen corre como usuario "foundry" (uid 1000) por defecto, pero COPY
+# durante el build deja los archivos como root -> forge build no puede
+# leerlos/escribir out/. Mismo fix que "deploy" en docker-compose.yml.
+USER root
 COPY contracts/src/ ./src/
 COPY contracts/foundry.toml .
 RUN forge build
