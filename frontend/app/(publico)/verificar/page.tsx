@@ -12,8 +12,9 @@
 import { useEffect, useState, type KeyboardEvent } from 'react';
 import { CheckIcon, ShieldIcon, XIcon } from '@/components/icons';
 import { ChatAssistant } from '@/components/ChatAssistant';
-import { RfidLectorStatus } from '@/components/RfidLectorStatus';
-import { useLectorRfid } from '@/hooks/useLectorRfid';
+import { BluetoothLectorStatus } from '@/components/BluetoothLectorStatus';
+import { VincularTarjetaPanel } from '@/components/VincularTarjetaPanel';
+import { useBluetoothRfid } from '@/hooks/useBluetoothRfid';
 import { api } from '@/lib/api';
 import { verificarCertificado, type ResultadoVerificacionHash } from '@/lib/blockchain';
 import type { Certificado, CertificadoTarjeta, MetadataCertificado } from '@/lib/types';
@@ -29,7 +30,7 @@ interface CertTarjetaVerificado {
 }
 
 export default function VerificarPage() {
-  const [modo, setModo] = useState<Modo>('codigo');
+  const [modo, setModo] = useState<Modo>('hash');
   const [query, setQuery] = useState('');
   const [verifyState, setVerifyState] = useState<VerifyState>('idle');
   const [hashState, setHashState] = useState<HashState>('idle');
@@ -69,9 +70,9 @@ export default function VerificarPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // En modo tarjeta, escucha el lector RFID (SSE): al escanear auto-verifica.
-  const { conectado: lectorConectado } = useLectorRfid({
-    activo: modo === 'tarjeta',
+  // En modo tarjeta, escucha el lector RFID por Bluetooth (BLE, ESP32-C5):
+  // al escanear, auto-verifica.
+  const { conectado: btConectado, conectando: btConectando, error: btError, conectar: btConectar, desconectar: btDesconectar, soportado: btSoportado } = useBluetoothRfid({
     onUid: (uid) => {
       setQuery(uid);
       reset();
@@ -96,7 +97,15 @@ export default function VerificarPage() {
     setErrorMsg('');
     try {
       const resultado = await api.obtenerPorTarjeta(uid.trim());
-      setTarjetaUid(resultado.uidRfid);
+      // Tarjeta nunca registrada: no hay credencial, así que tampoco hay
+      // certificados que verificar — mismo caso visual que "sin certificados"
+      // (el panel de vincular la crea si hace falta).
+      if (!resultado.valido) {
+        setTarjetaUid(uid.trim());
+        setTarjetaCerts([]);
+        return;
+      }
+      setTarjetaUid(resultado.credencial.uid);
       if (resultado.certificados.length === 0) {
         setTarjetaCerts([]);
       } else {
@@ -243,7 +252,7 @@ export default function VerificarPage() {
       ? 'Ingresa el código impreso en el certificado.'
       : modo === 'hash'
         ? 'Ingresa el hash del certificado para verificarlo en la blockchain.'
-        : 'Ingresa el UID de la tarjeta RFID o escaneala desde el prototipo.';
+        : 'Ingresa el UID de la tarjeta RFID o conecta el lector por Bluetooth y escanéala.';
 
   const placeholder =
     modo === 'codigo' ? 'Ej: UAX-2024-0847-MENG' : modo === 'hash' ? '0x + 64 hex' : 'Ej: 04A224B2';
@@ -259,7 +268,6 @@ export default function VerificarPage() {
       </div>
 
       <div className="flex flex-wrap justify-center gap-2 mb-6">
-        {botonModo('codigo', 'Por código')}
         {botonModo('hash', 'Por hash')}
         {botonModo('tarjeta', 'Por tarjeta RFID')}
       </div>
@@ -291,7 +299,14 @@ export default function VerificarPage() {
 
       {modo === 'tarjeta' && (
         <div className="flex justify-center -mt-3 mb-6">
-          <RfidLectorStatus activo conectado={lectorConectado} />
+          <BluetoothLectorStatus
+            conectado={btConectado}
+            conectando={btConectando}
+            soportado={btSoportado}
+            error={btError}
+            onConectar={btConectar}
+            onDesconectar={btDesconectar}
+          />
         </div>
       )}
 
@@ -474,16 +489,23 @@ export default function VerificarPage() {
 
       {/* ── Modo tarjeta ────────────────────────────────────── */}
       {tarjetaCerts.length === 0 && tarjetaUid && !tarjetaError && (
-        <div className="rounded-sm border-2 overflow-hidden" style={{ borderColor: '#c0392b' }}>
-          <div className="flex items-center gap-3 px-5 py-4 bg-[#fdf4f3]">
-            <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-invalid text-white">
-              <XIcon size={16} />
-            </div>
-            <div>
-              <p className="font-semibold text-red-800 text-sm">Tarjeta sin certificados</p>
-              <p className="text-red-700 text-xs">La credencial {tarjetaUid} no tiene certificados asociados.</p>
+        <div className="flex flex-col gap-4">
+          <div className="rounded-sm border-2 overflow-hidden" style={{ borderColor: '#c0392b' }}>
+            <div className="flex items-center gap-3 px-5 py-4 bg-[#fdf4f3]">
+              <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-invalid text-white">
+                <XIcon size={16} />
+              </div>
+              <div>
+                <p className="font-semibold text-red-800 text-sm">Tarjeta sin certificados</p>
+                <p className="text-red-700 text-xs">La credencial {tarjetaUid} no tiene certificados asociados.</p>
+              </div>
             </div>
           </div>
+          <VincularTarjetaPanel
+            uid={tarjetaUid}
+            modo="primeraVez"
+            onVinculado={() => void handleVerificarTarjeta(tarjetaUid)}
+          />
         </div>
       )}
 
@@ -550,6 +572,11 @@ export default function VerificarPage() {
               </div>
             );
           })}
+          <VincularTarjetaPanel
+            uid={tarjetaUid}
+            modo="agregarOtro"
+            onVinculado={() => void handleVerificarTarjeta(tarjetaUid)}
+          />
         </div>
       )}
     </div>

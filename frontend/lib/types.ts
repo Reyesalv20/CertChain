@@ -93,10 +93,22 @@ export interface CertificadoTarjeta {
   estado: string;
 }
 
-export interface ResultadoTarjeta {
-  uidRfid: string;
+// El backend responde distinto según si esa tarjeta (UID) ya tiene una fila
+// en credenciales_fisicas o no:
+//   - nunca se registró -> { valido: false, mensaje }
+//   - registrada (con o sin certificados) -> { valido: true, credencial, certificados }
+export interface ResultadoTarjetaEncontrada {
+  valido: true;
+  credencial: { id: string; uid: string; codigo: string | null; fechaEmisionFisica: string | null };
   certificados: CertificadoTarjeta[];
 }
+
+export interface ResultadoTarjetaNoRegistrada {
+  valido: false;
+  mensaje: string;
+}
+
+export type ResultadoTarjeta = ResultadoTarjetaEncontrada | ResultadoTarjetaNoRegistrada;
 
 // ── Admin: instituciones, wallets, usuarios ─────────────────
 // Coinciden con el contrato de /admin/* (docs/API_CONTRACT.md).

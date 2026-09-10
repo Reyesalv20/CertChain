@@ -168,6 +168,15 @@ export const api = {
     return apiFetch(`/certificados/por-rfid/${encodeURIComponent(uid)}`);
   },
 
+  // POST /certificados/:id/vincular-tarjeta (protegido, sin rol admin)
+  // Vincula una tarjeta RFID a un certificado propio de la institución logueada.
+  vincularTarjetaPropia(certId: string | number, uid: string): Promise<{ ok: boolean; credencialId: number; uidRfid: string }> {
+    return apiFetch(`/certificados/${certId}/vincular-tarjeta`, {
+      method: 'POST',
+      body: JSON.stringify({ uid }),
+    });
+  },
+
   // ── Portal institucional: certificados propios ─────────────
   // Lista todos los certificados de la institución del usuario.
   listarCertificadosInstitucion(): Promise<Certificado[]> {

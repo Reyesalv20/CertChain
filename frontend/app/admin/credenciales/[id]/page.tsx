@@ -7,8 +7,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api, ApiError } from '@/lib/api';
-import { useLectorRfid } from '@/hooks/useLectorRfid';
-import { RfidLectorStatus } from '@/components/RfidLectorStatus';
+import { useBluetoothRfid } from '@/hooks/useBluetoothRfid';
+import { BluetoothLectorStatus } from '@/components/BluetoothLectorStatus';
 import type { Certificado, CredencialFisica } from '@/lib/types';
 
 export default function CredencialDetallePage({ params }: { params: { id: string } }) {
@@ -16,15 +16,21 @@ export default function CredencialDetallePage({ params }: { params: { id: string
 
   const [credencial, setCredencial] = useState<CredencialFisica | null>(null);
   const [disponibles, setDisponibles] = useState<Certificado[]>([]);
-  const [form, setForm] = useState({ uidRfid: '', codigo: '', fechaEmisionFisica: '' });
+  const [form, setForm] = useState({ uidRfid: '', fechaEmisionFisica: '' });
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
   const [ok, setOk] = useState('');
   const [busy, setBusy] = useState(false);
 
-  // Al escanear una credencial, prellena el campo UID del formulario.
-  const { conectado: lectorConectado } = useLectorRfid({
-    activo: true,
+  // Al escanear una credencial por Bluetooth, prellena el campo UID del formulario.
+  const {
+    conectado: btConectado,
+    conectando: btConectando,
+    error: btError,
+    conectar: btConectar,
+    desconectar: btDesconectar,
+    soportado: btSoportado,
+  } = useBluetoothRfid({
     onUid: (uid) => setForm((prev) => ({ ...prev, uidRfid: uid })),
   });
 
@@ -36,7 +42,6 @@ export default function CredencialDetallePage({ params }: { params: { id: string
       setCredencial(cd);
       setForm({
         uidRfid: cd.uid_rfid ?? '',
-        codigo: cd.codigo ?? '',
         fechaEmisionFisica: (cd.fechaEmisionFisica ?? '').slice(0, 10),
       });
     } catch (e) {
@@ -62,13 +67,11 @@ export default function CredencialDetallePage({ params }: { params: { id: string
     try {
       const actualizada = await api.actualizarCredencial(credencial.credencial_id, {
         uidRfid: form.uidRfid,
-        codigo: form.codigo,
         fechaEmisionFisica: form.fechaEmisionFisica,
       });
       setCredencial(actualizada);
       setForm({
         uidRfid: actualizada.uid_rfid ?? '',
-        codigo: actualizada.codigo ?? '',
         fechaEmisionFisica: (actualizada.fechaEmisionFisica ?? '').slice(0, 10),
       });
       setOk('Credencial actualizada.');
@@ -130,26 +133,24 @@ export default function CredencialDetallePage({ params }: { params: { id: string
           <section className="bg-white border border-gray-200 rounded-sm p-5">
             <div className="flex items-center justify-between mb-1">
               <h2 className="text-sm font-semibold text-gray-700">Datos de la credencial</h2>
-              <RfidLectorStatus activo conectado={lectorConectado} />
+              <BluetoothLectorStatus
+                conectado={btConectado}
+                conectando={btConectando}
+                soportado={btSoportado}
+                error={btError}
+                onConectar={btConectar}
+                onDesconectar={btDesconectar}
+              />
             </div>
             <p className="text-xs text-gray-400 mb-4">ID interno: #{credencial.credencial_id} (no editable)</p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="sm:col-span-1">
-                <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 mb-1">UID RFID</label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 mb-1">UID RFID *</label>
                 <input
                   value={form.uidRfid}
                   onChange={(e) => setForm({ ...form, uidRfid: e.target.value })}
                   placeholder="UID de la credencial"
                   className="w-full px-3 py-2 text-sm border border-gray-200 rounded-sm outline-none font-mono"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 mb-1">Código</label>
-                <input
-                  value={form.codigo}
-                  onChange={(e) => setForm({ ...form, codigo: e.target.value })}
-                  placeholder="Código impreso (opcional)"
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-sm outline-none"
                 />
               </div>
               <div>

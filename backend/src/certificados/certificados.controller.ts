@@ -89,6 +89,19 @@ async obtenerMetadataPorHash(@Query('codigo') codigo?: string, @Query('hash') ha
     return this.certificados.porRfid(uid);
   }
 
+  // Vincula una tarjeta (por UID) a un certificado propio (institución del
+  // usuario autenticado). No requiere rol admin, a diferencia de
+  // /admin/certificados/:id/credenciales.
+  @UseGuards(SupabaseAuthGuard)
+  @Post(':id/vincular-tarjeta')
+  async vincularTarjeta(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { uid: string },
+    @Req() req: any,
+  ) {
+    return this.certificados.vincularTarjetaPropia(id, body.uid, req.institucion?.institucion_id ?? 0);
+  }
+
   // Los métodos con :id van al final para no chocar con las rutas literales.
   @UseGuards(SupabaseAuthGuard)
   @Get()
