@@ -14,20 +14,20 @@ export class CertificadosService {
   ) {}
 
   async procesar(pdfBuffer: Buffer, archivoNombre: string, institucionId: number) {
-    const texto = await this.ocr.extraerTexto(pdfBuffer);
-    const datos = this.ocr.parsearCampos(texto);
-    const hash = this.generarHash(pdfBuffer);
-    const subidaId = this.cache.guardar(hash, institucionId);
+  // CAMBIO: Usa parsearCamposConRegiones directamente
+  const datos = await this.ocr.parsearCamposConRegiones(pdfBuffer, institucionId);
+  const hash = this.generarHash(pdfBuffer);
+  const subidaId = this.cache.guardar(hash, institucionId);
 
-    return {
-      subidaId,
-      hash,
-      nombreEstudiante: datos.nombreEstudiante,
-      carrera: datos.carrera,
-      fechaEmision: datos.fechaEmision,
-      archivoNombre,
-    };
-  }
+  return {
+    subidaId,
+    hash,
+    nombreEstudiante: datos.nombreEstudiante,
+    carrera: datos.carrera,
+    fechaEmision: datos.fechaEmision,
+    archivoNombre,
+  };
+}
 
   async confirmar(
     datos: {
