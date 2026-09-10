@@ -81,6 +81,7 @@ export class ChatService {
 
     if (contexto) {
       return {
+        ...contexto,
         modo: contexto.modo ?? null,
         query: contexto.query ?? payload.codigoCertificado ?? null,
         estado: contexto.estado ?? 'unknown',

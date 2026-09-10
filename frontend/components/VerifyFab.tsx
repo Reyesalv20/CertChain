@@ -15,7 +15,7 @@ export function VerifyFab() {
   return (
     <Link
       href="/verificar"
-      className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 pl-4 pr-5 py-3 rounded-full bg-steel text-white text-sm font-semibold shadow-lg shadow-steel/30 hover:bg-steel-light transition-colors"
+      className="fixed bottom-6 right-24 z-50 flex items-center gap-2.5 pl-4 pr-5 py-3 rounded-full bg-steel text-white text-sm font-semibold shadow-lg shadow-steel/30 hover:bg-steel-light transition-colors"
     >
       <ShieldIcon size={18} color="#fff" />
       Verificación pública

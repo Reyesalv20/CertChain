@@ -21,25 +21,27 @@ export function FloatingChat({ pageMode = 'landing' }: { pageMode?: 'landing' | 
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="fixed bottom-24 right-6 z-50 flex items-center justify-center h-14 w-14 rounded-full bg-steel text-white shadow-lg shadow-slate-300/50 transition-all hover:scale-[1.02] hover:bg-steel-light"
-        aria-label="Abrir asistente IA"
-      >
-        <span className="text-sm font-semibold">AI</span>
-      </button>
+      <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
+        {open && (
+          <div className="w-[360px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-sm border border-gray-200 bg-white shadow-2xl shadow-slate-300/40 transition-all duration-300 ease-out animate-[fadeIn_0.2s_ease-out]">
+            <ChatAssistant
+              certFound={pageMode === 'verificacion'}
+              codigoCertificado=""
+              pageMode={pageMode}
+              defaultSuggestions={suggestions}
+            />
+          </div>
+        )}
 
-      {open && (
-        <div className="fixed bottom-40 right-6 z-50 w-[360px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-sm border border-gray-200 bg-white shadow-2xl shadow-slate-300/40">
-          <ChatAssistant
-            certFound={pageMode === 'verificacion'}
-            codigoCertificado=""
-            pageMode={pageMode}
-            defaultSuggestions={suggestions}
-          />
-        </div>
-      )}
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="flex items-center justify-center h-11 w-11 rounded-full bg-steel text-white shadow-[0_10px_25px_rgba(15,23,42,0.18)] ring-1 ring-slate-900/5 transition-all hover:scale-[1.02] hover:bg-steel-light"
+          aria-label="Abrir asistente IA"
+        >
+          <span className="text-[11px] font-semibold">AI</span>
+        </button>
+      </div>
     </>
   );
 }

@@ -13,11 +13,13 @@ export function ChatAssistant({
   codigoCertificado,
   pageMode = 'verificacion',
   defaultSuggestions = [],
+  contexto,
 }: {
   certFound: boolean;
   codigoCertificado: string;
   pageMode?: 'landing' | 'verificacion';
   defaultSuggestions?: string[];
+  contexto?: Record<string, unknown>;
 }) {
   const [messages, setMessages] = useState<MensajeChat[]>([
     {
@@ -50,7 +52,7 @@ export function ChatAssistant({
     setInput('');
     setTyping(true);
     try {
-      const contexto = pageMode === 'landing'
+      const contextoFinal = contexto ?? (pageMode === 'landing'
         ? {
             modo: null,
             query: null,
@@ -71,9 +73,9 @@ export function ChatAssistant({
               query: codigoCertificado || null,
               estado: 'invalid',
               certificado: null,
-            };
+            });
 
-      const { respuesta } = await api.preguntarAsistente(text, codigoCertificado, contexto, pageMode);
+      const { respuesta } = await api.preguntarAsistente(text, codigoCertificado, contextoFinal, pageMode);
       setMessages((m) => [...m, { rol: 'bot', texto: respuesta }]);
     } catch (err) {
       const mensaje =
@@ -118,15 +120,19 @@ export function ChatAssistant({
       </div>
 
       {defaultSuggestions.length > 0 && (
-        <>
-          {showSuggestions ? (
-            <div className="px-4 py-3 border-t border-gray-100">
+        <div className="border-t border-gray-100">
+          <div
+            className={`overflow-hidden transition-all duration-300 ease-out ${
+              showSuggestions ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'
+            }`}
+          >
+            <div className="px-4 py-3">
               <div className="mb-2 flex items-center justify-end">
                 <button
                   type="button"
                   onClick={() => setShowSuggestions(false)}
                   aria-label="Ocultar sugerencias"
-                  className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white text-xs text-gray-500 hover:bg-gray-100"
+                  className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white text-xs text-gray-500 hover:bg-gray-100 transition-colors"
                 >
                   ×
                 </button>
@@ -144,18 +150,24 @@ export function ChatAssistant({
                 ))}
               </div>
             </div>
-          ) : (
-            <div className="px-4 py-3 border-t border-gray-100">
+          </div>
+
+          <div
+            className={`overflow-hidden transition-all duration-300 ease-out ${
+              showSuggestions ? 'max-h-0 opacity-0' : 'max-h-10 opacity-100'
+            }`}
+          >
+            <div className="px-4 py-3">
               <button
                 type="button"
                 onClick={() => setShowSuggestions(true)}
-                className="text-[11px] font-medium text-gray-600 hover:text-gray-900 underline-offset-2 hover:underline"
+                className="text-[11px] font-medium text-gray-600 hover:text-gray-900 underline-offset-2 hover:underline transition-all"
               >
                 Ver sugerencias
               </button>
             </div>
-          )}
-        </>
+          </div>
+        </div>
       )}
 
       <div className="px-4 py-3 border-t border-gray-100 flex gap-2">

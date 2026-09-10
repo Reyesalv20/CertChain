@@ -350,7 +350,31 @@ export default function VerificarPage() {
               <p className="text-xs text-gray-400 font-mono break-all">Hash: {certificado.hash}</p>
             </div>
           </div>
-          <ChatAssistant certFound={true} codigoCertificado={certificado.codigo} />
+          <ChatAssistant
+            certFound={true}
+            codigoCertificado={certificado.codigo}
+            contexto={{
+              modo: 'codigo',
+              query: certificado.codigo,
+              estado: verifyState,
+              certificado: {
+                codigo: certificado.codigo,
+                nombreEstudiante: certificado.nombreEstudiante,
+                institucion: certificado.institucion ?? '—',
+                carrera: certificado.carrera,
+                fechaEmision: certificado.fechaEmision,
+                hash: certificado.hash,
+                estado: certificado.estado,
+              },
+              onChain: resultadoHash ? {
+                exists: resultadoHash.exists,
+                issuer: resultadoHash.issuer,
+                issueTimestamp: resultadoHash.issueTimestamp,
+                isRevoked: resultadoHash.isRevoked,
+                valid: resultadoHash.valid,
+              } : null,
+            }}
+          />
         </div>
       )}
 
@@ -373,7 +397,17 @@ export default function VerificarPage() {
               </p>
             </div>
           </div>
-          <ChatAssistant certFound={false} codigoCertificado={query.trim()} />
+          <ChatAssistant
+            certFound={false}
+            codigoCertificado={query.trim()}
+            contexto={{
+              modo: 'codigo',
+              query: query.trim(),
+              estado: 'invalid',
+              certificado: null,
+              onChain: null,
+            }}
+          />
         </div>
       )}
 
