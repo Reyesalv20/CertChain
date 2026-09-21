@@ -284,7 +284,7 @@ export const api = {
     pregunta: string,
     codigoCertificado: string,
     contexto?: Record<string, unknown>,
-    pagina: 'landing' | 'verificacion' = 'verificacion',
+    pagina: 'landing' | 'verificacion' | 'admin' = 'verificacion',
   ): Promise<{ respuesta: string; modelo?: string; estado?: string }> {
     return apiFetch('/chat', {
       method: 'POST',

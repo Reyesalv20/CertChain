@@ -6,6 +6,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { FloatingChat } from '@/components/FloatingChat';
 import { api, ApiError } from '@/lib/api';
 import type { Certificado } from '@/lib/types';
 
@@ -33,6 +34,27 @@ export default function CertificadosListaPage() {
   }, []);
 
   useEffect(cargar, [cargar]);
+
+  const chatContexto = {
+    modo: 'listado',
+    pagina: 'institucional_certificados',
+    query: 'mis certificados',
+    estado: 'idle',
+    certificado: null,
+    resumen: {
+      total: certs.length,
+      registrados: certs.filter((c) => c.estado === 'registrado').length,
+      revocados: certs.filter((c) => c.estado === 'revocado').length,
+      pendientes: certs.filter((c) => c.estado === 'pendiente').length,
+    },
+    certificados: certs.slice(0, 25).map((c) => ({
+      codigo: c.codigo,
+      nombreEstudiante: c.nombreEstudiante,
+      carrera: c.carrera,
+      fechaEmision: c.fechaEmision,
+      estado: c.estado,
+    })),
+  };
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-10">
@@ -102,6 +124,18 @@ export default function CertificadosListaPage() {
           })}
         </div>
       )}
+
+      <FloatingChat
+        pageMode="admin"
+        certFound={certs.length > 0}
+        codigoCertificado=""
+        contexto={chatContexto}
+        defaultSuggestions={[
+          '¿Cuántos certificados emití?',
+          '¿Hay certificados revocados?',
+          '¿Qué estudiantes aparecen en esta vista?',
+        ]}
+      />
     </div>
   );
 }

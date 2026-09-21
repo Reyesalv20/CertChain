@@ -17,7 +17,7 @@ export function ChatAssistant({
 }: {
   certFound: boolean;
   codigoCertificado: string;
-  pageMode?: 'landing' | 'verificacion';
+  pageMode?: 'landing' | 'verificacion' | 'admin';
   defaultSuggestions?: string[];
   contexto?: Record<string, unknown>;
 }) {
@@ -27,11 +27,13 @@ export function ChatAssistant({
       texto:
         pageMode === 'landing'
           ? 'Hola, soy el asistente de CertChain. Puedo orientarte sobre cómo verificar un certificado, usar tu tarjeta RFID o entender la tecnología blockchain.'
-          : certFound
-            ? 'Hola, soy el asistente de CertChain. Puedo responder tus preguntas sobre este certificado verificado. ¿En qué te puedo ayudar?'
-            : codigoCertificado
-              ? 'No encontré un certificado registrado. Verifica que el código sea correcto o prueba escaneando la tarjeta física.'
-              : 'Hola, soy el asistente de CertChain. Puedo orientarte sobre cómo verificar un certificado por código, hash o tarjeta RFID.',
+          : pageMode === 'admin'
+            ? 'Hola, soy el asistente de CertChain. Estoy revisando este listado y puedo ayudarte a responder preguntas sobre instituciones o certificados visibles en esta pantalla.'
+            : certFound
+              ? 'Hola, soy el asistente de CertChain. Puedo responder tus preguntas sobre este certificado verificado. ¿En qué te puedo ayudar?'
+              : codigoCertificado
+                ? 'No encontré un certificado registrado. Verifica que el código sea correcto o prueba escaneando la tarjeta física.'
+                : 'Hola, soy el asistente de CertChain. Puedo orientarte sobre cómo verificar un certificado por código, hash o tarjeta RFID.',
     },
   ]);
   const [input, setInput] = useState('');
@@ -61,29 +63,37 @@ export function ChatAssistant({
             estado: 'idle',
             certificado: null,
           }
-        : !codigoCertificado
+        : pageMode === 'admin'
           ? {
-              modo: null,
+              modo: 'listado',
               query: null,
               estado: 'idle',
               certificado: null,
-              onChain: null,
+              pagina: 'admin',
             }
-          : certFound
+          : !codigoCertificado
             ? {
-                modo: 'codigo',
-                query: codigoCertificado,
-                estado: 'valid',
-                certificado: {
-                  codigo: codigoCertificado,
-                },
-              }
-            : {
-                modo: 'codigo',
-                query: codigoCertificado || null,
-                estado: 'invalid',
+                modo: null,
+                query: null,
+                estado: 'idle',
                 certificado: null,
-              });
+                onChain: null,
+              }
+            : certFound
+              ? {
+                  modo: 'codigo',
+                  query: codigoCertificado,
+                  estado: 'valid',
+                  certificado: {
+                    codigo: codigoCertificado,
+                  },
+                }
+              : {
+                  modo: 'codigo',
+                  query: codigoCertificado || null,
+                  estado: 'invalid',
+                  certificado: null,
+                });
 
       console.log('[ChatAssistant] contextoFinal:', contextoFinal);
       console.log('[ChatAssistant] payload:', {

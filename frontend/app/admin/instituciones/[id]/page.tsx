@@ -10,6 +10,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { FloatingChat } from '@/components/FloatingChat';
 import { api, ApiError } from '@/lib/api';
 import type { Certificado, DetalleInstitucion, UsuarioAdmin, WalletInstitucion } from '@/lib/types';
 
@@ -26,6 +27,27 @@ export default function InstitucionDetailPage({ params }: { params: { id: string
   }, [id]);
 
   if (!inst && !error) return <div className="max-w-4xl mx-auto px-6 py-10 text-sm text-gray-400">Cargando...</div>;
+
+  const chatContexto = inst
+    ? {
+        modo: 'detalle',
+        pagina: 'admin_institucion_detalle',
+        query: inst.nombre,
+        estado: 'idle',
+        certificado: null,
+        institucion: {
+          id: inst.institucion_id,
+          nombre: inst.nombre,
+          cantCertificados: inst.cantCertificados ?? 0,
+        },
+      }
+    : {
+        modo: 'detalle',
+        pagina: 'admin_institucion_detalle',
+        query: `institucion_${id}`,
+        estado: 'idle',
+        certificado: null,
+      };
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-10">
@@ -49,6 +71,18 @@ export default function InstitucionDetailPage({ params }: { params: { id: string
           </div>
         </>
       )}
+
+      <FloatingChat
+        pageMode="admin"
+        certFound={Boolean(inst)}
+        codigoCertificado=""
+        contexto={chatContexto}
+        defaultSuggestions={[
+          '¿Cuántos certificados tiene esta institución?',
+          '¿Hay usuarios institucionales activos?',
+          '¿Qué wallets de emisión están asociadas?',
+        ]}
+      />
     </div>
   );
 }

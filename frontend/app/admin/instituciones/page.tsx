@@ -4,6 +4,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { FloatingChat } from '@/components/FloatingChat';
 import { api, ApiError } from '@/lib/api';
 import type { InstitucionAdmin } from '@/lib/types';
 
@@ -43,6 +44,23 @@ export default function AdminInstitucionesPage() {
       setCreando(false);
     }
   }
+
+  const chatContexto = {
+    modo: 'listado',
+    pagina: 'admin_instituciones',
+    query: 'instituciones',
+    estado: 'idle',
+    certificado: null,
+    resumen: {
+      total: items.length,
+      nombres: items.map((i) => i.nombre),
+    },
+    instituciones: items.map((i) => ({
+      id: i.institucion_id,
+      nombre: i.nombre,
+      walletAddress: i.wallet_address ?? null,
+    })),
+  };
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-10">
@@ -95,6 +113,18 @@ export default function AdminInstitucionesPage() {
           ))}
         </div>
       )}
+
+      <FloatingChat
+        pageMode="admin"
+        certFound={items.length > 0}
+        codigoCertificado=""
+        contexto={chatContexto}
+        defaultSuggestions={[
+          '¿Cuántas instituciones están cargadas?',
+          '¿Qué instituciones aparecen en esta vista?',
+          '¿Hay alguna institución con nombre específico?',
+        ]}
+      />
     </div>
   );
 }
