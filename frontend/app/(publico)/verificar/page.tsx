@@ -258,6 +258,139 @@ export default function VerificarPage() {
   const placeholder =
     modo === 'codigo' ? 'Ej: UAX-2024-0847-MENG' : modo === 'hash' ? '0x + 64 hex' : 'Ej: 04A224B2';
 
+  const certificadoContextual =
+    certificado
+      ? {
+          codigo: certificado.codigo,
+          nombreEstudiante: certificado.nombreEstudiante,
+          institucion: certificado.institucion ?? '—',
+          carrera: certificado.carrera,
+          fechaEmision: certificado.fechaEmision,
+          hash: certificado.hash,
+          estado: certificado.estado,
+        }
+      : metadata
+        ? {
+            codigo: metadata.codigo,
+            nombreEstudiante: metadata.nombreEstudiante,
+            institucion: metadata.institucion ?? '—',
+            carrera: metadata.carrera,
+            fechaEmision: metadata.fechaEmision,
+            hash: query.trim(),
+            estado: hashState === 'revoked' ? 'revocado' : 'validado',
+          }
+        : null;
+
+  const tarjetaChatContexto =
+    tarjetaCerts.length > 0
+      ? {
+          modo: 'tarjeta',
+          query: tarjetaUid,
+          estado: tarjetaCerts.some((t) => t.estado === 'revoked')
+            ? 'revoked'
+            : tarjetaCerts.some((t) => t.estado === 'valid')
+              ? 'valid'
+              : tarjetaCerts.some((t) => t.estado === 'invalid')
+                ? 'invalid'
+                : 'idle',
+          uid: tarjetaUid,
+          certificado: tarjetaCerts[0]?.cert ?? null,
+          certificados: tarjetaCerts.map((t) => ({
+            codigo: t.cert.codigo,
+            nombreEstudiante: t.cert.nombreEstudiante,
+            institucion: t.cert.institucion,
+            carrera: t.cert.carrera,
+            fechaEmision: t.cert.fechaEmision,
+            hash: t.cert.hash,
+            estado: t.estado,
+            onChain: t.onChain,
+          })),
+          onChain: tarjetaCerts[0]?.onChain ?? null,
+        }
+      : {
+          modo: 'tarjeta',
+          query: tarjetaUid || query.trim() || null,
+          estado: 'idle',
+          certificado: null,
+          certificados: [],
+          onChain: null,
+        };
+
+  const chatContexto =
+    verifyState === 'valid' && certificado
+      ? {
+          modo: 'codigo',
+          query: certificado.codigo,
+          estado: verifyState,
+          certificado: certificadoContextual,
+          onChain: resultadoHash
+            ? {
+                exists: resultadoHash.exists,
+                issuer: resultadoHash.issuer,
+                issueTimestamp: resultadoHash.issueTimestamp,
+                isRevoked: resultadoHash.isRevoked,
+                valid: resultadoHash.valid,
+              }
+            : null,
+        }
+      : verifyState === 'invalid'
+        ? {
+            modo: 'codigo',
+            query: query.trim() || null,
+            estado: 'invalid',
+            certificado: null,
+            onChain: null,
+          }
+        : verifyState === 'revoked' && certificado
+          ? {
+              modo: 'codigo',
+              query: certificado.codigo,
+              estado: 'revoked',
+              certificado: certificadoContextual,
+              onChain: resultadoHash
+                ? {
+                    exists: resultadoHash.exists,
+                    issuer: resultadoHash.issuer,
+                    issueTimestamp: resultadoHash.issueTimestamp,
+                    isRevoked: resultadoHash.isRevoked,
+                    valid: resultadoHash.valid,
+                  }
+                : null,
+            }
+          : hashState === 'valid' || hashState === 'revoked'
+            ? {
+                modo: 'hash',
+                query: query.trim() || null,
+                estado: hashState,
+                certificado: certificadoContextual,
+                onChain: resultadoHash
+                  ? {
+                      exists: resultadoHash.exists,
+                      issuer: resultadoHash.issuer,
+                      issueTimestamp: resultadoHash.issueTimestamp,
+                      isRevoked: resultadoHash.isRevoked,
+                      valid: resultadoHash.valid,
+                    }
+                  : null,
+              }
+            : modo === 'tarjeta' && tarjetaCerts.length > 0
+              ? tarjetaChatContexto
+              : {
+                  modo: modo === 'hash' ? 'hash' : modo === 'tarjeta' ? 'tarjeta' : 'codigo',
+                  query: query.trim() || null,
+                  estado: verifyState === 'error' ? 'error' : 'idle',
+                  certificado: certificadoContextual,
+                  onChain: resultadoHash
+                    ? {
+                        exists: resultadoHash.exists,
+                        issuer: resultadoHash.issuer,
+                        issueTimestamp: resultadoHash.issueTimestamp,
+                        isRevoked: resultadoHash.isRevoked,
+                        valid: resultadoHash.valid,
+                      }
+                    : null,
+                };
+
   return (
     <div className="max-w-2xl mx-auto px-6 py-16">
       <div className="text-center mb-12">
@@ -350,31 +483,6 @@ export default function VerificarPage() {
               <p className="text-xs text-gray-400 font-mono break-all">Hash: {certificado.hash}</p>
             </div>
           </div>
-          <ChatAssistant
-            certFound={true}
-            codigoCertificado={certificado.codigo}
-            contexto={{
-              modo: 'codigo',
-              query: certificado.codigo,
-              estado: verifyState,
-              certificado: {
-                codigo: certificado.codigo,
-                nombreEstudiante: certificado.nombreEstudiante,
-                institucion: certificado.institucion ?? '—',
-                carrera: certificado.carrera,
-                fechaEmision: certificado.fechaEmision,
-                hash: certificado.hash,
-                estado: certificado.estado,
-              },
-              onChain: resultadoHash ? {
-                exists: resultadoHash.exists,
-                issuer: resultadoHash.issuer,
-                issueTimestamp: resultadoHash.issueTimestamp,
-                isRevoked: resultadoHash.isRevoked,
-                valid: resultadoHash.valid,
-              } : null,
-            }}
-          />
         </div>
       )}
 
@@ -397,17 +505,6 @@ export default function VerificarPage() {
               </p>
             </div>
           </div>
-          <ChatAssistant
-            certFound={false}
-            codigoCertificado={query.trim()}
-            contexto={{
-              modo: 'codigo',
-              query: query.trim(),
-              estado: 'invalid',
-              certificado: null,
-              onChain: null,
-            }}
-          />
         </div>
       )}
 
@@ -615,7 +712,12 @@ export default function VerificarPage() {
         </div>
       )}
 
-      <FloatingChat pageMode="verificacion" />
+      <FloatingChat
+        pageMode="verificacion"
+        certFound={verifyState === 'valid' || verifyState === 'revoked' || hashState === 'valid' || hashState === 'revoked'}
+        codigoCertificado={certificado?.codigo ?? metadata?.codigo ?? query.trim()}
+        contexto={chatContexto}
+      />
     </div>
   );
 }

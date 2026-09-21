@@ -6,6 +6,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { FloatingChat } from '@/components/FloatingChat';
 import { WalletPanel } from '@/components/WalletPanel';
 import { useWallet } from '@/hooks/useWallet';
 import { api, ApiError } from '@/lib/api';
@@ -91,6 +92,30 @@ export default function CertificadoDetallePage({ params }: { params: { id: strin
   }
 
   const revocado = cert?.estado === 'revocado';
+
+  const chatContexto = cert
+    ? {
+        modo: 'codigo',
+        query: cert.codigo,
+        estado: cert.estado,
+        certificado: {
+          codigo: cert.codigo,
+          nombreEstudiante: cert.nombreEstudiante,
+          institucion: cert.institucion ?? '—',
+          carrera: cert.carrera,
+          fechaEmision: cert.fechaEmision,
+          hash: cert.hash,
+          estado: cert.estado,
+        },
+        pagina: 'institucional_certificado_detalle',
+      }
+    : {
+        modo: 'codigo',
+        query: `certificado_${id}`,
+        estado: 'idle',
+        certificado: null,
+        pagina: 'institucional_certificado_detalle',
+      };
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-10">
@@ -231,6 +256,18 @@ export default function CertificadoDetallePage({ params }: { params: { id: strin
           </div>
         </div>
       )}
+
+      <FloatingChat
+        pageMode="admin"
+        certFound={Boolean(cert)}
+        codigoCertificado={cert?.codigo ?? ''}
+        contexto={chatContexto}
+        defaultSuggestions={[
+          '¿Cuál es el estado de este certificado?',
+          '¿Qué institución emitió este certificado?',
+          '¿Cuándo se emitió este documento?',
+        ]}
+      />
     </div>
   );
 }

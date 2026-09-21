@@ -3,21 +3,41 @@
 import { useState } from 'react';
 import { ChatAssistant } from './ChatAssistant';
 
-export function FloatingChat({ pageMode = 'landing' }: { pageMode?: 'landing' | 'verificacion' }) {
+export function FloatingChat({
+  pageMode = 'landing',
+  certFound = false,
+  codigoCertificado = '',
+  contexto,
+  defaultSuggestions,
+}: {
+  pageMode?: 'landing' | 'verificacion' | 'admin';
+  certFound?: boolean;
+  codigoCertificado?: string;
+  contexto?: Record<string, unknown>;
+  defaultSuggestions?: string[];
+}) {
   const [open, setOpen] = useState(false);
 
   const suggestions =
-    pageMode === 'verificacion'
-      ? [
-          '¿Qué significa este certificado?',
-          '¿Cómo puedo verificarlo?',
-          '¿Qué pasa si está revocado?',
-        ]
-      : [
-          '¿Cómo puedo verificar mi tarjeta?',
-          '¿Cómo funciona la tecnología?',
-          '¿Puedo verificar mi certificado sin registro?',
-        ];
+    defaultSuggestions ?? (
+      pageMode === 'verificacion'
+        ? [
+            '¿Qué significa este certificado?',
+            '¿Cómo puedo verificarlo?',
+            '¿Qué pasa si está revocado?',
+          ]
+        : pageMode === 'admin'
+          ? [
+              '¿Hay certificados revocados?',
+              '¿Cuántos certificados están registrados?',
+              '¿Qué instituciones aparecen en esta vista?',
+            ]
+          : [
+              '¿Cómo puedo verificar mi tarjeta?',
+              '¿Cómo funciona la tecnología?',
+              '¿Puedo verificar mi certificado sin registro?',
+            ]
+    );
 
   return (
     <>
@@ -25,10 +45,11 @@ export function FloatingChat({ pageMode = 'landing' }: { pageMode?: 'landing' | 
         {open && (
           <div className="w-[360px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-sm border border-gray-200 bg-white shadow-2xl shadow-slate-300/40 transition-all duration-300 ease-out animate-[fadeIn_0.2s_ease-out]">
             <ChatAssistant
-              certFound={pageMode === 'verificacion'}
-              codigoCertificado=""
+              certFound={certFound}
+              codigoCertificado={codigoCertificado}
               pageMode={pageMode}
               defaultSuggestions={suggestions}
+              contexto={contexto}
             />
           </div>
         )}

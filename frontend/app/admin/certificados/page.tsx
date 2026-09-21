@@ -5,6 +5,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { FloatingChat } from '@/components/FloatingChat';
 import { api, ApiError } from '@/lib/api';
 import type { Certificado, InstitucionAdmin } from '@/lib/types';
 
@@ -37,6 +38,33 @@ export default function AdminCertificadosPage() {
   }, [cargar]);
 
   const filtrados = estado ? items.filter((c) => c.estado === estado) : items;
+
+  const chatContexto = {
+    modo: 'listado',
+    pagina: 'admin_certificados',
+    query: institucionId ? `institucion_id=${institucionId}` : 'todos',
+    estado: 'idle',
+    certificado: null,
+    resumen: {
+      total: items.length,
+      visibles: filtrados.length,
+      porEstado: {
+        registrado: items.filter((c) => c.estado === 'registrado').length,
+        revocado: items.filter((c) => c.estado === 'revocado').length,
+      },
+      institucionSeleccionada: institucionId
+        ? instituciones.find((i) => String(i.institucion_id) === String(institucionId))?.nombre ?? null
+        : null,
+    },
+    certificados: filtrados.slice(0, 25).map((c) => ({
+      codigo: c.codigo,
+      nombreEstudiante: c.nombreEstudiante,
+      carrera: c.carrera,
+      institucion: c.institucion ?? null,
+      fechaEmision: c.fechaEmision,
+      estado: c.estado,
+    })),
+  };
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-10">
@@ -112,6 +140,18 @@ export default function AdminCertificadosPage() {
           ))}
         </div>
       )}
+
+      <FloatingChat
+        pageMode="admin"
+        certFound={filtrados.length > 0}
+        codigoCertificado=""
+        contexto={chatContexto}
+        defaultSuggestions={[
+          '¿Hay certificados revocados?',
+          '¿Cuántos certificados están registrados?',
+          '¿Qué certificados aparecen para esta institución?',
+        ]}
+      />
     </div>
   );
 }
