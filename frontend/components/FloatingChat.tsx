@@ -3,7 +3,17 @@
 import { useState } from 'react';
 import { ChatAssistant } from './ChatAssistant';
 
-export function FloatingChat({ pageMode = 'landing' }: { pageMode?: 'landing' | 'verificacion' }) {
+export function FloatingChat({
+  pageMode = 'landing',
+  certFound = false,
+  codigoCertificado = '',
+  contexto,
+}: {
+  pageMode?: 'landing' | 'verificacion';
+  certFound?: boolean;
+  codigoCertificado?: string;
+  contexto?: Record<string, unknown>;
+}) {
   const [open, setOpen] = useState(false);
 
   const suggestions =
@@ -25,10 +35,11 @@ export function FloatingChat({ pageMode = 'landing' }: { pageMode?: 'landing' | 
         {open && (
           <div className="w-[360px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-sm border border-gray-200 bg-white shadow-2xl shadow-slate-300/40 transition-all duration-300 ease-out animate-[fadeIn_0.2s_ease-out]">
             <ChatAssistant
-              certFound={pageMode === 'verificacion'}
-              codigoCertificado=""
+              certFound={certFound}
+              codigoCertificado={codigoCertificado}
               pageMode={pageMode}
               defaultSuggestions={suggestions}
+              contexto={contexto}
             />
           </div>
         )}

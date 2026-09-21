@@ -29,7 +29,9 @@ export function ChatAssistant({
           ? 'Hola, soy el asistente de CertChain. Puedo orientarte sobre cómo verificar un certificado, usar tu tarjeta RFID o entender la tecnología blockchain.'
           : certFound
             ? 'Hola, soy el asistente de CertChain. Puedo responder tus preguntas sobre este certificado verificado. ¿En qué te puedo ayudar?'
-            : 'No encontré un certificado registrado. Verifica que el código sea correcto o prueba escaneando la tarjeta física.',
+            : codigoCertificado
+              ? 'No encontré un certificado registrado. Verifica que el código sea correcto o prueba escaneando la tarjeta física.'
+              : 'Hola, soy el asistente de CertChain. Puedo orientarte sobre cómo verificar un certificado por código, hash o tarjeta RFID.',
     },
   ]);
   const [input, setInput] = useState('');
@@ -59,23 +61,40 @@ export function ChatAssistant({
             estado: 'idle',
             certificado: null,
           }
-        : certFound
+        : !codigoCertificado
           ? {
-              modo: 'codigo',
-              query: codigoCertificado,
-              estado: 'valid',
-              certificado: {
-                codigo: codigoCertificado,
-              },
-            }
-          : {
-              modo: 'codigo',
-              query: codigoCertificado || null,
-              estado: 'invalid',
+              modo: null,
+              query: null,
+              estado: 'idle',
               certificado: null,
-            });
+              onChain: null,
+            }
+          : certFound
+            ? {
+                modo: 'codigo',
+                query: codigoCertificado,
+                estado: 'valid',
+                certificado: {
+                  codigo: codigoCertificado,
+                },
+              }
+            : {
+                modo: 'codigo',
+                query: codigoCertificado || null,
+                estado: 'invalid',
+                certificado: null,
+              });
+
+      console.log('[ChatAssistant] contextoFinal:', contextoFinal);
+      console.log('[ChatAssistant] payload:', {
+        texto: text,
+        codigoCertificado,
+        pageMode,
+        contexto: contextoFinal,
+      });
 
       const { respuesta } = await api.preguntarAsistente(text, codigoCertificado, contextoFinal, pageMode);
+      console.log('[ChatAssistant] respuesta:', respuesta);
       setMessages((m) => [...m, { rol: 'bot', texto: respuesta }]);
     } catch (err) {
       const mensaje =
