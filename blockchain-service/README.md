@@ -195,10 +195,12 @@ El orden de despliegue **importa**: `AcademicCertificates` necesita la direcció
 
 Hay **dos formas** de correrlo:
 
-1. **Standalone** (solo este servicio): desde `blockchain-service/`, `docker compose up -d --build` usa el `docker-compose.yml` local (`anvil + deploy + server`).
-2. **Desde el compose raíz** (integrado con el resto del stack): desde la raíz del repo, `docker compose up -d --build blockchain-service` usa el `docker-compose.yml` raíz, que trae `anvil + deploy + blockchain-service` (el `depends_on` levanta los dos primeros). No baja frontend/backend/llm.
+1. **Standalone** (solo este servicio): desde `blockchain-service/`, `docker compose up -d --build` usa el `docker-compose.yml` local (`anvil + deploy + server + otterscan`).
+2. **Desde el compose raíz** (integrado con el resto del stack): desde la raíz del repo, `docker compose up -d --build blockchain-service` usa el `docker-compose.yml` raíz, que trae `anvil + deploy + blockchain-service + otterscan` (el `depends_on` levanta los dos primeros). No baja frontend/backend/llm.
 
-> No corras ambos a la vez: comparten los puertos `8545` y `6000`.
+> No corras ambos a la vez: comparten los puertos `8545`, `6000` y `5100`.
+
+La UI de Otterscan queda disponible en `http://localhost:5100` y apunta automáticamente a Anvil por `ERIGON_URL=http://anvil:8545`.
 
 ### Levantar desde el compose raíz (paso a paso)
 
