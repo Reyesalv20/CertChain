@@ -59,6 +59,19 @@ services:
     networks:
       - certchain-network
 
+  # 4) Block explorer local para la blockchain Anvil
+  otterscan:
+    image: otterscan/otterscan:latest
+    environment:
+      ERIGON_URL: ${ANVIL_URL:-http://anvil:8545}
+      BEACON_API_URL: ""
+    depends_on:
+      - anvil
+    ports:
+      - "5100:80"
+    networks:
+      - certchain-network
+
 networks:
   # Nombre fijo: hace que proyectos separados compartan la misma red.
   certchain-network:
