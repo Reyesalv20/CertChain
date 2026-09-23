@@ -37,7 +37,7 @@ export function BluetoothLectorStatus({
       <button
         onClick={conectado ? onDesconectar : onConectar}
         disabled={conectando}
-        className="flex items-center gap-2.5 pl-4 pr-5 py-2.5 text-sm font-semibold rounded-full border-none transition-all disabled:opacity-80"
+        className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-sm border-none transition-all disabled:opacity-80"
         style={{
           backgroundColor: conectado ? '#f0faf4' : '#1F4E5F',
           color: conectado ? '#1a7a4a' : '#fff',
@@ -45,13 +45,13 @@ export function BluetoothLectorStatus({
         }}
       >
         <span
-          className="flex items-center justify-center w-6 h-6 rounded-full shrink-0"
+          className="flex items-center justify-center w-5 h-5 rounded-sm shrink-0"
           style={{ backgroundColor: conectado ? '#1a7a4a' : 'rgba(255,255,255,0.15)' }}
         >
           {conectado ? (
-            <CheckIcon size={13} />
+            <CheckIcon size={12} />
           ) : (
-            <BluetoothIcon size={13} color="#fff" />
+            <BluetoothIcon size={12} color="#fff" />
           )}
         </span>
         {conectando ? 'Abriendo Bluetooth…' : conectado ? 'Lector conectado' : 'Conectar lector por Bluetooth'}

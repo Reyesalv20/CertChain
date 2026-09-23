@@ -178,8 +178,16 @@ export class CertificadosService {
     if (error) throw new BadRequestException(error.message);
 
     const institucion = await this.obtenerNombreYWallet(institucionId);
+    const uidsPorCertificado = await this.obtenerUidsVinculados((data ?? []).map((c) => c.id_certificado));
 
-    return (data ?? []).map((c) => this.mapearCertificado(c, institucion?.nombre ?? null, institucion?.address ?? null));
+    return (data ?? []).map((c) =>
+      this.mapearCertificado(
+        c,
+        institucion?.nombre ?? null,
+        institucion?.address ?? null,
+        uidsPorCertificado.get(c.id_certificado) ?? null,
+      ),
+    );
   }
 
   // Detalle de un certificado propio (scoped por institución).
@@ -197,7 +205,13 @@ export class CertificadosService {
     if (!data) throw new BadRequestException('Certificado no encontrado.');
 
     const institucion = await this.obtenerNombreYWallet(institucionId);
-    return this.mapearCertificado(data, institucion?.nombre ?? null, institucion?.address ?? null);
+    const uidsPorCertificado = await this.obtenerUidsVinculados([data.id_certificado]);
+    return this.mapearCertificado(
+      data,
+      institucion?.nombre ?? null,
+      institucion?.address ?? null,
+      uidsPorCertificado.get(data.id_certificado) ?? null,
+    );
   }
 
   // Marca como revocado un certificado propio (el cliente ya lo revocó on-chain).
@@ -367,6 +381,7 @@ export class CertificadosService {
     c: any,
     institucion: string | null,
     institucionWallet: string | null,
+    uidVinculado: string | null = null,
   ) {
     return {
       id: String(c.id_certificado),
@@ -380,8 +395,27 @@ export class CertificadosService {
       institucionId: c.institucion_id,
       institucion,
       institucionWallet,
-      rfid: null,
+      rfid: uidVinculado,
     };
+  }
+
+  // Un certificado solo puede estar vinculado a UNA credencial física (el PK de
+  // certificados_credenciales es certificados_id). Devuelve, para los ids dados,
+  // el UID de la tarjeta a la que ya está vinculado cada uno (si tiene).
+  private async obtenerUidsVinculados(certIds: number[]): Promise<Map<number, string>> {
+    const mapa = new Map<number, string>();
+    if (certIds.length === 0) return mapa;
+
+    const { data } = await this.supabase.client
+      .from('certificados_credenciales')
+      .select('certificados_id, credenciales_fisicas(uid_rfid)')
+      .in('certificados_id', certIds);
+
+    (data ?? []).forEach((v: any) => {
+      const uid = v.credenciales_fisicas?.uid_rfid;
+      if (uid) mapa.set(v.certificados_id, uid);
+    });
+    return mapa;
   }
 
   private async obtenerNombreYWallet(institucionId: number) {

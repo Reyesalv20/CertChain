@@ -56,11 +56,14 @@ export function VincularTarjetaPanel({
       .catch(() => setCertificados([]));
   }, [autenticado, abierto, certificados]);
 
+  // Un certificado solo puede estar vinculado a una tarjeta a la vez: los que
+  // ya tienen una (rfid truthy) no deben ofrecerse acá.
+  const sinVincular = useMemo(() => (certificados ?? []).filter((c) => !c.rfid), [certificados]);
+
   const filtrados = useMemo(() => {
-    if (!certificados) return [];
     const q = filtro.trim().toLowerCase();
-    if (!q) return certificados.slice(0, 6);
-    return certificados
+    if (!q) return sinVincular.slice(0, 6);
+    return sinVincular
       .filter(
         (c) =>
           c.codigo.toLowerCase().includes(q) ||
@@ -68,7 +71,7 @@ export function VincularTarjetaPanel({
           c.carrera.toLowerCase().includes(q),
       )
       .slice(0, 6);
-  }, [certificados, filtro]);
+  }, [sinVincular, filtro]);
 
   function irALogin() {
     router.push(`/login?redirect=${encodeURIComponent(`/verificar?card_id=${uid}`)}`);

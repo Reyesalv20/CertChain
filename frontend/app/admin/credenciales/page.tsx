@@ -16,13 +16,21 @@ function fechaCorta(iso: string | null) {
   return iso ? new Date(iso).toLocaleDateString('es-MX') : '—';
 }
 
+// Fecha de hoy en formato YYYY-MM-DD (lo que espera un <input type="date">).
+function hoyISO() {
+  const hoy = new Date();
+  const mes = String(hoy.getMonth() + 1).padStart(2, '0');
+  const dia = String(hoy.getDate()).padStart(2, '0');
+  return `${hoy.getFullYear()}-${mes}-${dia}`;
+}
+
 export default function AdminCredencialesPage() {
   const [credenciales, setCredenciales] = useState<CredencialFisica[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
   const [ok, setOk] = useState('');
   const [busy, setBusy] = useState(false);
-  const [nueva, setNueva] = useState({ uidRfid: '', fechaEmisionFisica: '' });
+  const [nueva, setNueva] = useState({ uidRfid: '', fechaEmisionFisica: hoyISO() });
 
   // El lector por Bluetooth prellena el UID de la credencial al escanear.
   const {
@@ -66,7 +74,7 @@ export default function AdminCredencialesPage() {
         uidRfid: uid,
         fechaEmisionFisica: nueva.fechaEmisionFisica || undefined,
       });
-      setNueva({ uidRfid: '', fechaEmisionFisica: '' });
+      setNueva({ uidRfid: '', fechaEmisionFisica: hoyISO() });
       setOk('Credencial física registrada.');
       await cargar();
     } catch (e) {
@@ -93,8 +101,8 @@ export default function AdminCredencialesPage() {
 
       {/* Alta de credencial física */}
       <section className="bg-white border border-gray-200 rounded-sm p-5 mb-6">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-gray-700">Ingresar nueva credencial física</h2>
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+          <h2 className="text-sm font-semibold text-gray-700 pt-1.5">Ingresar nueva credencial física</h2>
           <BluetoothLectorStatus
             conectado={btConectado}
             conectando={btConectando}

@@ -11,11 +11,20 @@ import { useBluetoothRfid } from '@/hooks/useBluetoothRfid';
 import { BluetoothLectorStatus } from '@/components/BluetoothLectorStatus';
 import type { Certificado, CredencialFisica } from '@/lib/types';
 
+// Fecha de hoy en formato YYYY-MM-DD (lo que espera un <input type="date">).
+function hoyISO() {
+  const hoy = new Date();
+  const mes = String(hoy.getMonth() + 1).padStart(2, '0');
+  const dia = String(hoy.getDate()).padStart(2, '0');
+  return `${hoy.getFullYear()}-${mes}-${dia}`;
+}
+
 export default function CredencialDetallePage({ params }: { params: { id: string } }) {
   const id = Number(params.id);
 
   const [credencial, setCredencial] = useState<CredencialFisica | null>(null);
   const [disponibles, setDisponibles] = useState<Certificado[]>([]);
+  const [certificadosVinculadosGlobal, setCertificadosVinculadosGlobal] = useState<Set<string>>(new Set());
   const [form, setForm] = useState({ uidRfid: '', fechaEmisionFisica: '' });
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
@@ -42,7 +51,7 @@ export default function CredencialDetallePage({ params }: { params: { id: string
       setCredencial(cd);
       setForm({
         uidRfid: cd.uid_rfid ?? '',
-        fechaEmisionFisica: (cd.fechaEmisionFisica ?? '').slice(0, 10),
+        fechaEmisionFisica: cd.fechaEmisionFisica ? cd.fechaEmisionFisica.slice(0, 10) : hoyISO(),
       });
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'No se pudo cargar la credencial.');
@@ -57,6 +66,17 @@ export default function CredencialDetallePage({ params }: { params: { id: string
       .obtenerCertificadosAdmin()
       .then(setDisponibles)
       .catch(() => setDisponibles([]));
+    // Un certificado solo puede estar vinculado a una tarjeta a la vez, así que
+    // además de los ya vinculados a ESTA credencial hay que excluir del selector
+    // los que ya están vinculados a cualquier otra.
+    api
+      .obtenerCredenciales()
+      .then((todas) => {
+        const idsVinculados = new Set<string>();
+        todas.forEach((c) => c.certificados.forEach((cert) => idsVinculados.add(cert.id)));
+        setCertificadosVinculadosGlobal(idsVinculados);
+      })
+      .catch(() => setCertificadosVinculadosGlobal(new Set()));
   }, [cargar]);
 
   async function guardar() {
@@ -72,7 +92,7 @@ export default function CredencialDetallePage({ params }: { params: { id: string
       setCredencial(actualizada);
       setForm({
         uidRfid: actualizada.uid_rfid ?? '',
-        fechaEmisionFisica: (actualizada.fechaEmisionFisica ?? '').slice(0, 10),
+        fechaEmisionFisica: actualizada.fechaEmisionFisica ? actualizada.fechaEmisionFisica.slice(0, 10) : hoyISO(),
       });
       setOk('Credencial actualizada.');
     } catch (e) {
@@ -82,8 +102,7 @@ export default function CredencialDetallePage({ params }: { params: { id: string
     }
   }
 
-  const vinculados = new Set((credencial?.certificados ?? []).map((c) => c.id));
-  const candidatos = disponibles.filter((c) => !vinculados.has(c.id));
+  const candidatos = disponibles.filter((c) => !certificadosVinculadosGlobal.has(c.id));
   const [selCert, setSelCert] = useState('');
 
   async function vincular() {
@@ -92,6 +111,7 @@ export default function CredencialDetallePage({ params }: { params: { id: string
     setError('');
     try {
       await api.vincularCertificadoACredencial(id, selCert);
+      setCertificadosVinculadosGlobal((prev) => new Set(prev).add(selCert));
       setSelCert('');
       await cargar();
     } catch (e) {
@@ -106,6 +126,11 @@ export default function CredencialDetallePage({ params }: { params: { id: string
     setError('');
     try {
       await api.desvincularCertificadoDeCredencial(id, certId);
+      setCertificadosVinculadosGlobal((prev) => {
+        const next = new Set(prev);
+        next.delete(certId);
+        return next;
+      });
       await cargar();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'No se pudo quitar el certificado.');
@@ -131,7 +156,7 @@ export default function CredencialDetallePage({ params }: { params: { id: string
         <div className="flex flex-col gap-6">
           {/* Campos editables (menos el id) */}
           <section className="bg-white border border-gray-200 rounded-sm p-5">
-            <div className="flex items-center justify-between mb-1">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-1">
               <h2 className="text-sm font-semibold text-gray-700">Datos de la credencial</h2>
               <BluetoothLectorStatus
                 conectado={btConectado}
